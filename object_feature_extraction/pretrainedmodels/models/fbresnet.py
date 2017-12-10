@@ -157,11 +157,12 @@ class FBResNet(nn.Module):
         x = self.layer2(x)
         x = self.layer3(x)
         x = self.layer4(x)
+        x = self.avgpool(x)
         return x
 
     def logits(self, features):
-        x = self.avgpool(features)
-        x = x.view(x.size(0), -1)
+#        x = self.avgpool(features)
+        x = features.view(features.size(0), -1)
         x = self.last_linear(x)
         return x
 
