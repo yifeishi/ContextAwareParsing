@@ -30,6 +30,60 @@ else:
 # RENDER
 # -------------------------------------------
 
+# define views
+viewpoint_samples_file = os.path.join(BASE_DIR, 'sample_viewpoints.txt')
+viewpoint_samples = [[float(x) for x in line.rstrip().split(' ')] for line in open(viewpoint_samples_file,'r')]
+#v = viewpoint_samples[1]
+
+# search the .obj
+suncg_sub_dir = os.listdir(g_suncg_object_path)
+for obj_dir in suncg_sub_dir:
+    file_names = os.listdir(os.path.join(g_suncg_object_path,obj_dir))
+    for file_name in file_names:
+        L = file_name.split('_')
+        if os.path.splitext(file_name)[1] == '.obj' and L[0] == 'unified':
+            file_path = os.path.join(g_suncg_object_path,obj_dir,file_name)
+            img_folder = os.path.join(g_suncg_object_path,obj_dir,'rgb_img')
+            if not os.path.exists(img_folder):
+                os.mkdir(img_folder)
+            count = 0
+            for v in viewpoint_samples:
+                image_path = os.path.join(img_folder,str(count)+'.png')
+                python_cmd = 'python %s -a %s -e %s -t %s -d %s -m %s -o %s' % (os.path.join(BASE_DIR, 'render_class_view.py'), 
+                    str(v[0]), str(v[1]), str(v[2]), str(v[3]), file_path, image_path)
+                os.system('%s %s' % (python_cmd, io_redirect))
+                count = count + 1
+
+
+"""
+# tmp
+print(os.path.join(g_suncg_object_path,'42'))
+file_names = os.listdir(os.path.join(g_suncg_object_path,'42'))
+print(file_names)
+
+for file_name in file_names:
+    strlist = file_name.split('_')
+    if os.path.splitext(file_name)[1] == '.obj' and strlist[0] == 'unified':
+        print('strlist')
+        print(strlist[0])
+        print('\n')
+        print('file_name')
+        print(file_name)
+        print('\n')
+        file_path = os.path.join(g_suncg_object_path,'42',file_name)
+        img_folder = os.path.join(g_suncg_object_path,'42','rgb_img')
+        if not os.path.exists(img_folder):
+            os.mkdir(img_folder)
+        image_path = os.path.join(img_folder,'0.png')
+        python_cmd = 'python %s -a %s -e %s -t %s -d %s -m %s -o %s' % (os.path.join(BASE_DIR, 'render_class_view.py'), 
+            str(v[0]), str(v[1]), str(v[2]), str(v[3]), file_path, image_path)
+        os.system('%s %s' % (python_cmd, io_redirect))
+#        print(file_path)
+#        print(image_path)
+#        print('\n')
+"""
+
+"""
 # set filepath
 syn_images_folder = os.path.join(BASE_DIR, 'demo_images')
 model_name = 'chair001'
@@ -37,57 +91,12 @@ image_name = 'demo_img.png'
 if not os.path.exists(syn_images_folder):
     os.mkdir(syn_images_folder)
     os.mkdir(os.path.join(syn_images_folder, model_name))
-viewpoint_samples_file = os.path.join(BASE_DIR, 'sample_viewpoints.txt')
-viewpoint_samples = [[float(x) for x in line.rstrip().split(' ')] for line in open(viewpoint_samples_file,'r')]
 
-# run code
-v = random.choice(viewpoint_samples)
 print ">> Selected view: ", v
 python_cmd = 'python %s -a %s -e %s -t %s -d %s -o %s' % (os.path.join(BASE_DIR, 'render_class_view.py'), 
     str(v[0]), str(v[1]), str(v[2]), str(v[3]), os.path.join(syn_images_folder, model_name, image_name))
-print ">> Running rendering command: \n \t %s" % (python_cmd)
+#print ">> Running rendering command: \n \t %s" % (python_cmd)
+print ">> Running rendering command: \n \t"
 os.system('%s %s' % (python_cmd, io_redirect))
 
-# show result
-print(">> Displaying rendered image ...")
-im = Image.open(os.path.join(syn_images_folder, model_name, image_name))
-im.show()
-
-
-# -------------------------------------------
-# CROP
-# -------------------------------------------
-
-# set filepath
-bkg_folder = os.path.join(BASE_DIR, 'sample_bkg_images')
-bkg_filelist = os.path.join(bkg_folder, 'filelist.txt')
-syn_images_cropped_folder = os.path.join(BASE_DIR, 'demo_images_cropped')
-truncation_samples_file = os.path.join(BASE_DIR, 'sample_truncations.txt')
-
-# run matlab code
-matlab_cmd = "addpath('%s'); crop_images('%s','%s','%s',1);" % (os.path.join(g_render4cnn_root_folder, 'render_pipeline'), syn_images_folder, syn_images_cropped_folder, truncation_samples_file)
-print ">> Starting MATLAB ... to run cropping command: \n \t %s" % matlab_cmd
-os.system('%s -nodisplay -r "try %s ; catch; end; quit;" %s' % (g_matlab_executable_path, matlab_cmd, io_redirect))
-
-# show result
-print(">> Displaying cropped image ...")
-im = Image.open(os.path.join(syn_images_cropped_folder, model_name, image_name))
-im.show()
-
- 
-# -------------------------------------------
-# OVERLAY BACKGROUND
-# -------------------------------------------
-
-# set filepath
-syn_images_cropped_bkg_overlaid_folder = os.path.join(BASE_DIR, 'demo_images_cropped_bkg_overlaid')
-
-# run code
-matlab_cmd = "addpath('%s'); overlay_background('%s','%s','%s', '%s', %f, 1);" % (os.path.join(g_render4cnn_root_folder, 'render_pipeline'), syn_images_cropped_folder, syn_images_cropped_bkg_overlaid_folder, bkg_filelist, bkg_folder, 1.0)
-print ">> Starting MATLAB ... to run background overlaying command: \n \t %s" % matlab_cmd
-os.system('%s -nodisplay -r "try %s ; catch; end; quit;" %s' % (g_matlab_executable_path, matlab_cmd, io_redirect))
-
-# show result
-print("Displaying background overlaid image ...")
-im = Image.open(os.path.join(syn_images_cropped_bkg_overlaid_folder, model_name, image_name.replace('.png', '.jpg')))
-im.show()
+"""

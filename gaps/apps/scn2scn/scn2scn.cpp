@@ -185,6 +185,7 @@ int main(int argc, char **argv)
   R3Scene *scene = ReadScene(input_name);
   if (!scene) exit(-1);
 
+/*
   // Move center to origin
   double size = scene->BBox().XLength();
   if (size < scene->BBox().YLength())
@@ -198,6 +199,7 @@ int main(int argc, char **argv)
   xform.XTranslate(-scene->Centroid().X());
   xform.YTranslate(-scene->Centroid().Y());
   xform.ZTranslate(-scene->Centroid().Z());
+*/
 
   // Transform scene
   if (!xform.IsIdentity()) {

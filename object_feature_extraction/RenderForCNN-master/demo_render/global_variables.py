@@ -106,3 +106,5 @@ g_caffe_deploy_file = os.path.join(g_render4cnn_root_folder, 'caffe_models', 'de
 g_image_mean_file = os.path.join(g_render4cnn_root_folder, 'caffe_models', 'imagenet_mean.npy') 
 g_caffe_prob_keys = ['fc-azimuth','fc-elevation','fc-tilt']
 g_test_batch_size = 64
+
+g_suncg_object_path = '/data/05/deepfusion/users/yifeis/sceneparsing/data/object'
