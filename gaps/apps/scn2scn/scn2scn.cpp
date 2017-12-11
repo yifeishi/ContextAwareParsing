@@ -185,6 +185,20 @@ int main(int argc, char **argv)
   R3Scene *scene = ReadScene(input_name);
   if (!scene) exit(-1);
 
+  // Move center to origin
+  double size = scene->BBox().XLength();
+  if (size < scene->BBox().YLength())
+	  size = scene->BBox().YLength();
+  if (size < scene->BBox().ZLength())
+	  size = scene->BBox().ZLength();
+  xform.XScale(1.0 / size);
+  xform.YScale(1.0 / size);
+  xform.ZScale(1.0 / size);
+ 
+  xform.XTranslate(-scene->Centroid().X());
+  xform.YTranslate(-scene->Centroid().Y());
+  xform.ZTranslate(-scene->Centroid().Z());
+
   // Transform scene
   if (!xform.IsIdentity()) {
     R3SceneNode *root = scene->Root();
@@ -194,6 +208,7 @@ int main(int argc, char **argv)
     root->SetTransformation(tmp);
   }
 
+  
   // Apply processing operations
   if (remove_references) scene->RemoveReferences();
   if (remove_hierarchy) scene->RemoveHierarchy();

@@ -972,6 +972,19 @@ ReadLights(const char *filename)
   return 1;
 }
   
+static void
+WriteBBoxes(R3Scene *scene, R3SceneNode *node)
+{
+  fprintf(stderr, "max pt: %f %f %f \n", node->BBox().XMax(), node->BBox().YMax(), node->BBox().ZMax()); 
+  fprintf(stderr, "min pt: %f %f %f \n\n", node->BBox().XMin(), node->BBox().YMin(), node->BBox().ZMin()); 
+
+  fprintf(stderr, "node->NChildren(): %d\n", node->NChildren()); 
+   for (int i = 0; i < node->NChildren(); i++) {
+    fprintf(stderr, "i: %d\n", i); 
+    R3SceneNode *child = node->Child(i);
+    WriteBBoxes(scene, child);
+  }
+}
 
 
 static int 
@@ -1062,8 +1075,12 @@ int main(int argc, char **argv)
   GLUTInit(&argc, argv);
 
   // Read scene
+
   scene = ReadScene(input_scene_name);
   if (!scene) exit(-1);
+
+  fprintf(stderr, "WriteBBoxes\n");
+  WriteBBoxes(scene, scene->Root());
 
   // Read cameras
   if (input_cameras_name) {

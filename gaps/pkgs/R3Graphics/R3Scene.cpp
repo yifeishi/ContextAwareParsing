@@ -3909,7 +3909,7 @@ ReadSUNCGModelFile(const char *filename)
     fprintf(stderr, "Unable to open lights file %s\n", filename);
     return 0;
   }
-
+  
   // Read keys from first line
   int line_number = 1;
   char key_buffer[4096];
@@ -3939,6 +3939,7 @@ ReadSUNCGModelFile(const char *filename)
 
   // Read subsequent lines of file
   char value_buffer[4096];
+  int count = 0;
   while (fgets(value_buffer, 4096, fp)) {
     line_number++;
 
@@ -3962,21 +3963,37 @@ ReadSUNCGModelFile(const char *filename)
     if (!model_id) continue;
     int model_id_length = strlen(model_id);
     if (model_id_length == 0) continue;
+//    fprintf(stderr, "model_id: %s \n", model_id);
 
     // Assign key-value info to nodes matching model_id
     for (int i = 0; i < NNodes(); i++) {
       R3SceneNode *node = Node(i);
+      const char *yifei_model_name = NULL;
+      if(node->NReferences()){
+         yifei_model_name = node->Reference(0)->ReferencedScene()->Name();
+//	 fprintf(stderr, "yifei_model_name: %d %s \n", i, yifei_model_name);
+      }
       if (!node->Name()) continue;
+
       char node_name[1024];
       strncpy(node_name, node->Name(), 1024);
       char *model_name = strchr(node_name, '#');
       if (model_name) { *model_name = '\0'; model_name++; }
       else model_name = node_name;
-      if (!strcmp(node_name, model_id) || !strcmp(model_name, model_id)) {
-        for (int j = 0; j < keys.NEntries(); j++) {
-          node->InsertInfo(keys[j], values[j]);
-        }
+      if(yifei_model_name){
+//         fprintf(stderr, "model_id node_name model_name yifei_model_name: %s %s %s %s \n\n", model_id, node_name, model_name, yifei_model_name);
+         if (!strcmp(yifei_model_name, model_id)) {
+            count++;
+            for (int j = 0; j < keys.NEntries(); j++) {
+//                fprintf(stderr, "keys values: %s %s \n", keys[j], values[j]);
+                node->InsertInfo(keys[j], values[j]);
+            }
+//            fprintf(stderr, "count, index, model_id, class: %d, %s, %s, %s \n", count, values[0], values[1], values[3]);
+          }
       }
+//          fprintf(stderr, "model_id node_name model_name yifei_model_name: %s %s %s %s \n\n", model_id, node_name, model_name, yifei_model_name);
+//      if (!strcmp(node_name, model_id) || !strcmp(model_name, model_id) |) {
+      
     }
 
     // Assign key-value info to root node of referenced scenes matching model_id
@@ -3987,12 +4004,12 @@ ReadSUNCGModelFile(const char *filename)
       }
     }
   }
-
   // Close file
   fclose(fp);
 
 #if 0
   // Print result
+  printf("Print result %d \n", NNodes());
   for (int i = 0; i < NNodes(); i++) {
     R3SceneNode *node = Node(i);
     const char *model_index = node->Info("index");
@@ -4000,6 +4017,38 @@ ReadSUNCGModelFile(const char *filename)
   }
 #endif
   
+  // Return success
+  return 1;
+}
+
+
+int R3Scene::
+WriteOBBFile(const char *filename, R3Scene *scene, R3SceneNode *node)
+{
+  if (!scene) return 0;
+  
+  // Open file
+  FILE *fp = fopen(filename, "a");
+  if (!fp) {
+    fprintf(stderr, "Unable to open file %s", filename);
+    return 0;
+  }
+
+  // Write file
+  if (node->Info("model_id") && node->Info("coarse_grained_class") && node->BBox().XMax() > -10000 && node->BBox().XMax() < 10000) {
+    const char *value_id = node->Info("model_id");
+    fprintf(fp, "%s %f %f %f %f %f %f \n", value_id, node->BBox().XMax(), node->BBox().YMax(), node->BBox().ZMax(), node->BBox().XMin(), node->BBox().YMin(), node->BBox().ZMin());
+//    fprintf(fp, "model_id: %s \n", value_id);
+//    const char *value_class = node->Info("coarse_grained_class");
+//    fprintf(fp, "class: %s \n \n", value_class);
+  }
+  fclose(fp);
+
+  for (int i = 0; i < node->NChildren(); i++) {
+    R3SceneNode *child = node->Child(i);
+    WriteOBBFile(filename, this, child);
+  }
+
   // Return success
   return 1;
 }
