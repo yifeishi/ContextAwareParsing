@@ -3,8 +3,8 @@
 The features are:
 
 - feature of multi-view images
-- feature of voxels
 - feature of OBB
+- feature of voxels
 
 ## feature of multi-view images
 
@@ -30,24 +30,10 @@ python tmp.py
 
 ## feature of OBB
 
-1. unify SUNCG objects
 ```python
-cd RenderForCNN-master
-cd unify_suncg_obj
-python scn2scn_suncg_object.py
-python mtl2mtl_suncg_object.py
-```
-
-2. render multi-view images
-```python
-cd demo_render
-python run_demo.py
-```
-
-3. extract feature by resnet
-```python
-cd examples
-python tmp.py
+cd obb_fea_ext
+python scn2obb_suncg_house.py
+(use gaps/scn2obb)
 ```
 
 
