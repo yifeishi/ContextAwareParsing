@@ -1,3 +1,30 @@
+# Object feature extraction for SUNCG objects
+
+The features are:
+
+- feature of multi-view images
+- feature of voxels
+- feature of OBB
+
+## feature of multi-view images
+
+1. render multi-view images
+`cd RenderForCNN-master`
+`cd unify_suncg_obj`
+`python scn2scn_suncg_object.py`
+`python mtl2mtl_suncg_object.py`
+`cd ..`
+`cd demo_render`
+`python run_demo.py`
+
+`cd examples`
+`python tmp.py`
+
+2. [pytorch with/out CUDA](http://pytorch.org)
+3. `git clone https://github.com/Cadene/pretrained-models.pytorch.git`
+
+
+# Old README
 # Pretrained models for Pytorch (Work in progress)
 
 The goal of this repo is:
