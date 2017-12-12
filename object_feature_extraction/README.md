@@ -8,24 +8,50 @@ The features are:
 
 ## feature of multi-view images
 
-1. render multi-view images
-`cd RenderForCNN-master`
-`cd unify_suncg_obj`
-`python scn2scn_suncg_object.py`
-`python mtl2mtl_suncg_object.py`
-`cd ..`
-`cd demo_render`
-`python run_demo.py`
+1. unify SUNCG objects
+```python
+cd RenderForCNN-master
+cd unify_suncg_obj
+python scn2scn_suncg_object.py
+python mtl2mtl_suncg_object.py
+```
 
-`cd examples`
-`python tmp.py`
+2. render multi-view images
+```python
+cd demo_render
+python run_demo.py
+```
 
-2. [pytorch with/out CUDA](http://pytorch.org)
-3. `git clone https://github.com/Cadene/pretrained-models.pytorch.git`
+3. extract feature by resnet
+```python
+cd examples
+python tmp.py
+```
+
+## feature of OBB
+
+1. unify SUNCG objects
+```python
+cd RenderForCNN-master
+cd unify_suncg_obj
+python scn2scn_suncg_object.py
+python mtl2mtl_suncg_object.py
+```
+
+2. render multi-view images
+```python
+cd demo_render
+python run_demo.py
+```
+
+3. extract feature by resnet
+```python
+cd examples
+python tmp.py
+```
 
 
-# Old README
-# Pretrained models for Pytorch (Work in progress)
+# Old README - Pretrained models for Pytorch (Work in progress)
 
 The goal of this repo is:
 
