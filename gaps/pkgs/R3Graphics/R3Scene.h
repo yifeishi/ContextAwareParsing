@@ -122,7 +122,7 @@ public:
   // SUNCG utility functions
   int ReadSUNCGLightsFile(const char *filename);
   int ReadSUNCGModelFile(const char *filename);
-  int WriteOBBFile(const char *filename, R3Scene *scene, R3SceneNode *node);
+  int WriteOBBFile(char *filename, R3Scene *scene, R3SceneNode *node);
 
 private:
   R3SceneNode *root;

@@ -26,7 +26,7 @@ static int remove_hierarchy = 0;
 static double max_vertex_spacing = 0;
 static int print_verbose = 0;
 static char *input_categories_filename = NULL;
-static char *output_obb_filename = NULL;
+char *output_obb_filename = NULL;
 
 
 // GLUT variables 
@@ -986,7 +986,7 @@ ReadCategories(const char *filename)
   if (!scene->ReadSUNCGModelFile(filename)) return 0;
 
   // Print statistics
-  if (1) {
+  if (0) {
     printf("Read categories from %s ...\n", filename);
     printf("  Time = %.2f seconds\n", start_time.Elapsed());
     fflush(stdout);
@@ -998,7 +998,7 @@ ReadCategories(const char *filename)
 
 
 static int
-WriteOBB(const char *filename)
+WriteOBB(char *filename)
 {
   // Start statistics
   RNTime start_time;
@@ -1122,7 +1122,8 @@ int main(int argc, char **argv)
     if (!WriteOBB(output_obb_filename)) exit(-1);
   }
 
-  // Return success 
+  // Return success
+  fprintf(stderr, "Done\n \n");
   return 0;
 }
 

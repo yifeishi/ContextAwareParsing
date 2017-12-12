@@ -3531,14 +3531,14 @@ ReadSUNCGFile(const char *filename, R3SceneNode *parent_node)
   for (Json::ArrayIndex index = 0; index < json_levels->size(); index++) {
     if (!GetJsonArrayEntry(json_level, json_levels, index)) return 0;
     if (json_level->type() != Json::objectValue) continue;
-           
+   
     // Parse level attributes
     int level_id = index;
     if (GetJsonObjectMember(json_value, json_level, "valid"))
       if (!json_value->asString().compare(std::string("0")))  continue;
     if (GetJsonObjectMember(json_value, json_level, "id"))
       level_id = atoi(json_value->asString().c_str());
-
+    
     // Create level node
     char level_name[1024];
     sprintf(level_name, "Level#%d", level_id);
@@ -3981,7 +3981,6 @@ ReadSUNCGModelFile(const char *filename)
       if (model_name) { *model_name = '\0'; model_name++; }
       else model_name = node_name;
       if(yifei_model_name){
-//         fprintf(stderr, "model_id node_name model_name yifei_model_name: %s %s %s %s \n\n", model_id, node_name, model_name, yifei_model_name);
          if (!strcmp(yifei_model_name, model_id)) {
             count++;
             for (int j = 0; j < keys.NEntries(); j++) {
@@ -4023,10 +4022,31 @@ ReadSUNCGModelFile(const char *filename)
 
 
 int R3Scene::
-WriteOBBFile(const char *filename, R3Scene *scene, R3SceneNode *node)
+WriteOBBFile(char *filename, R3Scene *scene, R3SceneNode *node)
 {
   if (!scene) return 0;
-  
+
+  // Update filename if type==Room
+  char node_name[1024];
+  strncpy(node_name, node->Name(), 1024);
+  char delims[] = "#";
+  char *node_type = NULL;
+  char *node_id = NULL;
+  node_type = strtok(node_name, delims);
+  node_id = strtok(NULL, delims);
+ 
+  if (!strcmp(node_type, "Room"))
+  {
+    char *tmp;
+    char delims[] = "b"; // take b in obb
+    tmp = strtok(filename, delims);
+    strcat(tmp, "bb_");
+    strcat(tmp, node_id);
+    strcat(tmp, ".txt");
+    strcpy(filename, tmp);
+    fprintf(stderr, "Write to %s\n",filename);
+  }
+
   // Open file
   FILE *fp = fopen(filename, "a");
   if (!fp) {
