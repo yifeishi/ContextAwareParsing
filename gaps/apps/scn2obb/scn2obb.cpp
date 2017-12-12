@@ -1108,18 +1108,9 @@ int main(int argc, char **argv)
   // Parse program arguments
   if (!ParseArgs(argc, argv)) exit(-1);
 
-  // Initialize GLUT
-  GLUTInit(&argc, argv);
-
   // Read scene
   scene = ReadScene(input_scene_name);
   if (!scene) exit(-1);
-
-  // Read cameras
-  if (input_cameras_name) {
-    cameras = ReadCameras(input_cameras_name);
-    if (!cameras) exit(-1);
-  }
 
   // Read categories
   if (input_categories_filename) {
@@ -1130,17 +1121,6 @@ int main(int argc, char **argv)
   if (output_obb_filename) {
     if (!WriteOBB(output_obb_filename)) exit(-1);
   }
-
-  // Read/create lights
-  if (input_lights_name) { if (!ReadLights(input_lights_name)) exit(-1); }
-  else { scene->CreateDirectionalLights(); headlight = 1; }
-
-  // Create viewer
-  viewer = CreateBirdsEyeViewer(scene);
-  if (!viewer) exit(-1);
-
-  // Run GLUT interface
-  GLUTMainLoop();
 
   // Return success 
   return 0;
