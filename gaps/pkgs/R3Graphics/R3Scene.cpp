@@ -3557,9 +3557,11 @@ ReadSUNCGFile(const char *filename, R3SceneNode *parent_node)
         if (json_node->type() != Json::objectValue) continue;
  
         // Parse node attributes
-        char node_id[1024] = { '\0' };;
-        char modelId[1024] = { '\0' };;
+        char node_id[1024] = { '\0' };
+        char modelId[1024] = { '\0' };
         char node_type[1024] = { '\0' };
+		char room_type[1024] = { '\0' };
+		strncpy(room_type, "Unknown", 1024);
         int hideCeiling = 0, hideFloor = 0, hideWalls = 0;
         int isMirrored = 0, state = 0;
         if (GetJsonObjectMember(json_value, json_node, "valid"))
@@ -3581,6 +3583,13 @@ ReadSUNCGFile(const char *filename, R3SceneNode *parent_node)
         if (GetJsonObjectMember(json_value, json_node, "state")) 
           if (!json_value->asString().compare(std::string("1"))) state = 1;
 
+		if (!strcmp(node_type, "Room") && GetJsonObjectMember(json_items, json_node, "roomTypes", Json::arrayValue)) {
+			if (json_items->size() >= 1) {
+				if (GetJsonArrayEntry(json_item, json_items, 0))
+					strncpy(room_type, json_item->asString().c_str(), 1024);
+			}
+		}
+		
         // Parse node transformation
         R3Affine transformation = R3identity_affine;
         if (GetJsonObjectMember(json_items, json_node, "transform", Json::arrayValue)) {
@@ -3613,9 +3622,10 @@ ReadSUNCGFile(const char *filename, R3SceneNode *parent_node)
           R3SceneNode *room_node = new R3SceneNode(this);
           sprintf(node_name, "Room#%s", node_id);
           room_node->SetName(node_name);
+		  room_node->SetRoomType(room_type);
           level_node->InsertChild(room_node);
           created_nodes[index] = room_node;
-          
+
            // Create node for floor
           sprintf(obj_name, "%s/room/%s/%sf.obj", input_data_directory, scene_id, modelId); 
           if (!hideFloor && RNFileExists(obj_name)) {
@@ -3635,7 +3645,7 @@ ReadSUNCGFile(const char *filename, R3SceneNode *parent_node)
             if (!ReadObj(this, node, obj_name)) return 0;
             room_node->InsertChild(node);
           }
-
+		  
           // Create node for walls
           sprintf(obj_name, "%s/room/%s/%sw.obj", input_data_directory, scene_id, modelId); 
           if (!hideWalls && RNFileExists(obj_name)) {
@@ -3644,7 +3654,7 @@ ReadSUNCGFile(const char *filename, R3SceneNode *parent_node)
             node->SetName(node_name);
             if (!ReadObj(this, node, obj_name)) return 0;
             room_node->InsertChild(node);
-          }        
+          }
         }
         else if (!strcmp(node_type, "Object")) {
           // Read/get model 
@@ -4038,11 +4048,14 @@ WriteOBBFile(char *filename, R3Scene *scene, R3SceneNode *node)
   if (!strcmp(node_type, "Room"))
   {
     char *tmp;
-    char delims[] = "b"; // take b in obb
-    tmp = strtok(filename, delims);
-    strcat(tmp, "bb_");
+    char* delims = "_"; // search _ in filename
+    tmp = strtok(filename,delims);
+//    printf("tmp %s \n",tmp);
+    strcat(tmp,"_");
     strcat(tmp, node_id);
+//    printf("tmp %s \n",tmp);
     strcat(tmp, ".txt");
+//    printf("tmp %s \n",tmp);
     strcpy(filename, tmp);
     fprintf(stderr, "Write to %s\n",filename);
   }
@@ -4071,4 +4084,44 @@ WriteOBBFile(char *filename, R3Scene *scene, R3SceneNode *node)
 
   // Return success
   return 1;
+}
+
+
+int R3Scene::
+WriteRoomFile(const char *scene_name, char *room_type, char *filename, R3Scene *scene, R3SceneNode *node)
+{
+	if (!scene) return 0;
+
+	// check if type==Room && room_type_this==room_type
+	char node_name[1024];
+	strncpy(node_name, node->Name(), 1024);
+	char delims[] = "#";
+	char *node_type = NULL;
+	node_type = strtok(node_name, delims);
+	char *node_id = NULL;
+	node_id = strtok(NULL, delims);
+	
+	char room_type_this[1024];
+	if (!strcmp(node_type, "Room"))
+		strncpy(room_type_this, node->RoomType(), 1024);
+	
+	if (!strcmp(node_type, "Room") && !strcmp(room_type_this, room_type))
+	{
+		FILE *fp = fopen(filename, "a+");
+		if (!fp) {
+			fprintf(stderr, "Unable to open file %s\n", filename);
+			return 0;
+		}
+
+		fprintf(fp, "%s %s %s\n", scene_name, node_id, room_type);
+		fclose(fp);
+	}
+
+	for (int i = 0; i < node->NChildren(); i++) {
+		R3SceneNode *child = node->Child(i);
+		WriteRoomFile(scene_name, room_type, filename, this, child);
+	}
+
+	// Return success
+	return 1;
 }

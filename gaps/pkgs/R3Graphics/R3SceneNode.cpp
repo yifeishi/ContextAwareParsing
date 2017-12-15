@@ -49,6 +49,7 @@ R3SceneNode(R3Scene *scene)
     transformation(R3identity_affine),
     bbox(FLT_MAX, FLT_MAX, FLT_MAX, -FLT_MAX, -FLT_MAX, -FLT_MAX),
     name(NULL),
+	room_type(NULL),
     data(NULL)
 {
   // Insert node into scene
@@ -497,6 +498,14 @@ SetName(const char *name)
   else this->name = NULL;
 }
 
+void R3SceneNode::
+SetRoomType(const char *roomtype)
+{
+	// Set name
+	if (this->room_type) free(this->room_type);
+	if (roomtype) this->room_type = strdup(roomtype);
+	else this->room_type = NULL;
+}
 
 
 void R3SceneNode::

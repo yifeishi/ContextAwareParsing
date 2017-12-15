@@ -27,6 +27,7 @@ target:
 	cd scn2img; $(MAKE) $(TARGET)
 	cd scnview; $(MAKE) $(TARGET)
 	cd scn2obb; $(MAKE) $(TARGET)
+	cd scn2room; $(MAKE) $(TARGET)
 
 
 

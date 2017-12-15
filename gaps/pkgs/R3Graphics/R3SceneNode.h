@@ -28,6 +28,7 @@ public:
   const RNVolume Volume(void) const;
   const R3Affine& Transformation(void) const;
   const char *Name(void) const;
+  const char *RoomType(void) const;
   const char *Info(const char *key) const;
   void *Data(void) const;
 
@@ -63,6 +64,7 @@ public:
   void SetTransformation(const R3Affine& transformation);
   void Transform(const R3Affine& transformation);
   void SetName(const char *name);
+  void SetRoomType(const char *roomtype);
   void SetData(void *data);
 
   // Query functions
@@ -98,6 +100,7 @@ private:
   R3Affine transformation;
   R3Box bbox;
   char *name;
+  char *room_type;
   void *data;
 };
 
@@ -211,6 +214,13 @@ Name(void) const
   return name;
 }
 
+
+inline const char *R3SceneNode::
+RoomType(void) const
+{
+	// Return name
+	return room_type;
+}
 
 
 inline const char *R3SceneNode::

@@ -51,8 +51,17 @@ class GRASSDataset(data.Dataset):
     def __init__(self, dir, transform=None):
         self.dir = dir
         box_data = torch.from_numpy(loadmat(self.dir+'/box_data.mat')['boxes']).float()
+        print('box_data size: ')
+        print(box_data.size())
+        print('\n')
         op_data = torch.from_numpy(loadmat(self.dir+'/op_data.mat')['ops']).int()
+        print('op_data size: ')
+        print(op_data.size())
+        print('\n')
         sym_data = torch.from_numpy(loadmat(self.dir+'/sym_data.mat')['syms']).float()
+        print('sym_data size: ')
+        print(sym_data.size())
+        print('\n')
         #weight_list = torch.from_numpy(loadmat(self.dir+'/weights.mat')['weights']).float()
         num_examples = op_data.size()[1]
         box_data = torch.chunk(box_data, num_examples, 1)
@@ -67,7 +76,11 @@ class GRASSDataset(data.Dataset):
             syms = torch.t(sym_data[i])
             tree = Tree(boxes, ops, syms)
             self.trees.append(tree)
-
+        print('////size: ')
+        print(boxes.size())
+        print(ops)
+        print(syms)
+        print('\n')
     def __getitem__(self, index):
         tree = self.trees[index]
         return tree

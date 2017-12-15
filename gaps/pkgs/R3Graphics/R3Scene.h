@@ -123,7 +123,8 @@ public:
   int ReadSUNCGLightsFile(const char *filename);
   int ReadSUNCGModelFile(const char *filename);
   int WriteOBBFile(char *filename, R3Scene *scene, R3SceneNode *node);
-
+  int WriteRoomFile(const char *scene_name, char *filename, char *room_type, R3Scene *scene, R3SceneNode *node);
+  
 private:
   R3SceneNode *root;
   RNArray<R3SceneNode *> nodes;
