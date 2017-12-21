@@ -54,7 +54,6 @@ class R3SceneElement;
 #include "R3Graphics/R3Scene.h"
 
 
-
 /* Initialization functions */
 
 int R3InitGraphics(void);

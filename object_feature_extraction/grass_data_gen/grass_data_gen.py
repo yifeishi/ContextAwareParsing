@@ -6,6 +6,16 @@ import sys
 import scipy.io as sio
 import numpy as np
 
+def ObbFeatureTransformer(obj_obb_fea_tmp):
+    obj_obb_fea = np.zeros(6)
+    obj_obb_fea[0] = (obj_obb_fea_tmp[0] + obj_obb_fea_tmp[3])*0.5
+    obj_obb_fea[1] = (obj_obb_fea_tmp[1] + obj_obb_fea_tmp[4])*0.5
+    obj_obb_fea[2] = (obj_obb_fea_tmp[2] + obj_obb_fea_tmp[5])*0.5
+    obj_obb_fea[3] = obj_obb_fea_tmp[0] - obj_obb_fea_tmp[3]
+    obj_obb_fea[4] = obj_obb_fea_tmp[1] - obj_obb_fea_tmp[4]
+    obj_obb_fea[5] = obj_obb_fea_tmp[2] - obj_obb_fea_tmp[5]
+    return obj_obb_fea
+
 
 dataNum = 100
 maxBoxes = 300
@@ -14,7 +24,7 @@ mvFeatureSize = 2048
 boxes = np.zeros((featureSize,maxBoxes*dataNum))
 
 # load room txt
-g_room_type = 'toilet'
+g_room_type = 'office'
 g_room_file_path = '/n/fs/deepfusion/users/yifeis/sceneparsing/data/'+g_room_type+'_room.txt'
 g_out_file_path = '/n/fs/deepfusion/users/yifeis/sceneparsing/data/'+g_room_type+'_room_feature'
 g_house_path = '/n/fs/deepfusion/users/yifeis/sceneparsing/data/house'
@@ -44,6 +54,7 @@ while 1:
         LT = LT[1:len(LT)-1]
         obj_obb_fea = list(map(float, LT))
         obj_obb_fea = np.array(obj_obb_fea)
+        obj_obb_fea = ObbFeatureTransformer(obj_obb_fea)
         obj_mv_fea_file_path = os.path.join(g_object_path,obj_name,'rgb_img/feature.txt')
         obj_mv_fea_file = open(obj_mv_fea_file_path)
         obj_mv_fea_sum = np.zeros((mvFeatureSize,5))

@@ -28,7 +28,7 @@ target:
 	cd scnview; $(MAKE) $(TARGET)
 	cd scn2obb; $(MAKE) $(TARGET)
 	cd scn2room; $(MAKE) $(TARGET)
-
+	cd stats2hie; $(MAKE) $(TARGET)
 
 
 
