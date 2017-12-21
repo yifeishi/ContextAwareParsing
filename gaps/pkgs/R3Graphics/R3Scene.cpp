@@ -3484,6 +3484,7 @@ ReadSUNCGFile(const char *filename, R3SceneNode *parent_node)
   // Get scene up direction
   R3Vector scene_up(0, 1, 0);
   if (GetJsonObjectMember(json_items, &json_root, "up", Json::arrayValue)) {
+	  fprintf(stderr, "up json_items: %d\n", json_items->size());
     if (json_items->size() >= 3) {
       if (GetJsonArrayEntry(json_item, json_items, 0))
         scene_up[0] = json_item->asDouble();
@@ -3518,6 +3519,7 @@ ReadSUNCGFile(const char *filename, R3SceneNode *parent_node)
   // Create scene node 
   R3SceneNode *scene_node = parent_node;
   scene_node->SetName(scene_id);
+  nodeIDsNum = 0;
 
   // Set scene transformation
   R3Affine scene_transformation = R3identity_affine;
@@ -3552,6 +3554,7 @@ ReadSUNCGFile(const char *filename, R3SceneNode *parent_node)
       if (json_nodes->size() == 0) continue;
       R3SceneNode **created_nodes = new R3SceneNode * [ json_nodes->size() ];
       for (unsigned int i = 0; i < json_nodes->size(); i++) created_nodes[i] = NULL;
+	  nodeIDs = new std::string[json_nodes->size()*5];
       for (Json::ArrayIndex index = 0; index < json_nodes->size(); index++) {
         if (!GetJsonArrayEntry(json_node, json_nodes, index)) continue; 
         if (json_node->type() != Json::objectValue) continue;
@@ -3564,10 +3567,16 @@ ReadSUNCGFile(const char *filename, R3SceneNode *parent_node)
 		strncpy(room_type, "Unknown", 1024);
         int hideCeiling = 0, hideFloor = 0, hideWalls = 0;
         int isMirrored = 0, state = 0;
+		std::string node_id_string;
         if (GetJsonObjectMember(json_value, json_node, "valid"))
           if (!json_value->asString().compare(std::string("0")))  continue;
-        if (GetJsonObjectMember(json_value, json_node, "id"))
-          strncpy(node_id, json_value->asString().c_str(), 1024);
+		if (GetJsonObjectMember(json_value, json_node, "id"))
+		{
+			strncpy(node_id, json_value->asString().c_str(), 1024);
+//			strncpy(nodeIDs[index], json_value->asString().c_str(), 1024);
+			node_id_string = nodeIDs[index] = json_value->asString();
+			nodeIDsNum++;
+		}
         if (GetJsonObjectMember(json_value, json_node, "type")) 
           strncpy(node_type, json_value->asString().c_str(), 1024);
         if (GetJsonObjectMember(json_value, json_node, "modelId"))
@@ -3669,6 +3678,8 @@ ReadSUNCGFile(const char *filename, R3SceneNode *parent_node)
             model->Root()->SetName(node_name);
             model->SetFilename(obj_name);
             InsertReferencedScene(model);
+//			fprintf(stderr, "modelId %s\n", modelId);
+//			fprintf(stderr, "node_name %s\n", node_name);		
             model_symbol_table.Insert(obj_name, model);
           }
 
@@ -3716,6 +3727,37 @@ ReadSUNCGFile(const char *filename, R3SceneNode *parent_node)
           level_node->InsertChild(node);
           created_nodes[index] = node;
         }
+
+		// Create map for node_id and box
+		R3Vector bboxMin, bboxMax;
+		std::vector<float> vecBox(6);
+		Json::Value *json_tmps, *json_tmp;
+		if (GetJsonObjectMember(json_value, json_node, "bbox")) {
+			if (GetJsonObjectMember(json_items, json_value, "min")) {
+				for (Json::ArrayIndex indexT = 0; indexT < json_items->size(); indexT++) {
+					if (!GetJsonArrayEntry(json_item, json_items, indexT)) continue;
+					bboxMin[indexT] = json_item->asDouble();
+				}
+				vecBox[3] = bboxMin[0];
+				vecBox[4] = bboxMin[1];
+				vecBox[5] = bboxMin[2];
+			}
+			if (GetJsonObjectMember(json_items, json_value, "max")) {
+				for (Json::ArrayIndex indexT = 0; indexT < json_items->size(); indexT++) {
+					if (!GetJsonArrayEntry(json_item, json_items, indexT)) continue;
+					bboxMax[indexT] = json_item->asDouble();
+				}
+				vecBox[0] = bboxMax[0];
+				vecBox[1] = bboxMax[1];
+				vecBox[2] = bboxMax[2];
+			}
+		}
+		
+		mapBox.Insert(node_id_string, vecBox);
+		std::vector<float> search;
+		mapBox.Find(node_id_string, &search);
+//		fprintf(stderr, "node_id_string  %s\n", node_id_string.c_str());
+//		fprintf(stderr, "search0  %f\n", search[0]);
       }
 
       // Move created nodes to be children of room nodes
@@ -4058,6 +4100,10 @@ WriteOBBFile(char *filename, R3Scene *scene, R3SceneNode *node)
 //    printf("tmp %s \n",tmp);
     strcpy(filename, tmp);
     fprintf(stderr, "Write to %s\n",filename);
+
+	// Clean file
+	FILE *fpClean = fopen(filename, "w");
+	fclose(fpClean);
   }
 
   // Open file
@@ -4124,4 +4170,374 @@ WriteRoomFile(const char *scene_name, char *room_type, char *filename, R3Scene *
 
 	// Return success
 	return 1;
+}
+
+
+int R3Scene::
+ReadStatsFile(const char *filename, R3SceneNode *parent_node)
+{
+	fprintf(stderr, "ReadStatsFile %s\n", filename);
+	// Useful variables
+	const char *input_data_directory = "../..";
+	RNSymbolTable<R2Texture *> texture_symbol_table;
+	RNSymbolTable<R3Scene *> model_symbol_table;
+	if (!parent_node) parent_node = root;
+
+	// Open file
+	FILE* fp = fopen(filename, "rb");
+	if (!fp) {
+		fprintf(stderr, "Unable to open STATS file %s\n", filename);
+		return 0;
+	}
+
+	// Read file 
+	std::string text;
+	fseek(fp, 0, SEEK_END);
+	long const size = ftell(fp);
+	fseek(fp, 0, SEEK_SET);
+	char* buffer = new char[size + 1];
+	unsigned long const usize = static_cast<unsigned long const>(size);
+	if (fread(buffer, 1, usize, fp) != usize) { fprintf(stderr, "Unable to read %s\n", filename); return 0; }
+	else { buffer[size] = 0; text = buffer; }
+	delete[] buffer;
+
+	// Close file
+	fclose(fp);
+
+	// Digest file
+	Json::Value json_root;
+	Json::Reader json_reader;
+	Json::Value *json_items, *json_item, *json_value;
+	if (!json_reader.parse(text, json_root, false)) {
+		fprintf(stderr, "Unable to parse %s\n", filename);
+		return 0;
+	}
+	
+	// Parse relations
+	Json::Value *json_relations, *json_relation;
+	if (!GetJsonObjectMember(json_relations, &json_root, "relations")) return 0;
+	if (GetJsonObjectMember(json_items, json_relations, "support", Json::arrayValue))
+	{
+		for (Json::ArrayIndex index = 0; index < json_items->size(); index++) {
+			if (!GetJsonArrayEntry(json_item, json_items, index)) return 0;
+			Json::Value::Members member = json_item->getMemberNames();
+
+			Json::Value *json_value;
+			std::string child, parent;
+			if (GetJsonObjectMember(json_value, json_item, "child", Json::stringValue)) {
+				child = json_value->asString();
+				fprintf(stderr, "child %s\n", child.c_str());
+			}
+			if (GetJsonObjectMember(json_value, json_item, "parent", Json::stringValue)) {
+				parent = json_value->asString();
+				fprintf(stderr, "parent %s\n\n", parent.c_str());
+			}
+			mapFather.Insert(child, parent);
+		}
+	}
+	
+	// Return success
+	return 1;
+}
+
+
+int R3Scene::
+BuildSceneHierarchy()
+{
+	fprintf(stderr, "UpdataMapChildren\n");
+	UpdataMapChildren();
+
+	// initialize map valid
+	for (int i = 0; i < nodeIDsNum; i++)
+	{
+		std::vector<std::string> children;
+		mapChildren.Find(nodeIDs[i], &children);
+
+		if (children.size() == 0) // is leaf
+			mapValid.Insert(nodeIDs[i], true);
+		else
+			mapValid.Insert(nodeIDs[i], false);
+	}
+
+	
+	newNodeNum = 0;
+	bool processedFlag;
+	// iterate
+	do
+	{	
+		processedFlag = false;
+		// for every father
+		for (int i = 0; i < nodeIDsNum; i++)
+		{
+			std::vector<std::string> children;
+			mapChildren.Find(nodeIDs[i], &children);
+			if (children.size() == 0)	continue;
+
+			// check if all the child are valid
+			bool allNodeValidFlag = true;
+			for (int j = 0; j < children.size(); j++)
+			{
+				bool leafFlag;
+				mapValid.Find(children[j], &leafFlag);
+				if (!leafFlag)
+				{
+					allNodeValidFlag = false;
+					break;
+				}
+			}
+			if (allNodeValidFlag)
+			{
+				fprintf(stderr, "\n");
+				fprintf(stderr, "binarize node %s, it has %d child:\n", nodeIDs[i].c_str(), children.size());
+				BinarizeNode(nodeIDs[i]);
+				processedFlag = true;
+				fprintf(stderr, "\n");
+			}
+		}
+	} while (processedFlag);
+
+	return 1;
+}
+
+int R3Scene::
+BinarizeNode(std::string root)
+{
+	do
+	{
+		std::vector<std::string> children;
+		mapChildren.Find(root, &children);
+//		fprintf(stderr, "root %s has %d child\n, they are:", root.c_str(), children.size());
+		fprintf(stderr, "consider nodes: ");
+		for (int j = 0; j < children.size(); j++)
+		{
+			fprintf(stderr, "%s ", children[j].c_str());
+		}
+		fprintf(stderr, " \n");
+
+		if (children.size() == 1)
+		{
+			MergeNodes(root, children[0]);
+			break;
+		}
+		else
+		{
+			std::string node1, node2;
+			double groupness;
+			SelectGroupNodes(children, node1, node2, groupness);
+			fprintf(stderr, "group %s & %s, groupness is %f\n", node1.c_str(), node2.c_str(), groupness);
+			MergeNodes(node1, node2);
+		}
+	} while (true);
+	return 1;
+}
+
+
+void R3Scene::
+SelectGroupNodes(std::vector<std::string> children, std::string &node1, std::string &node2, double &groupness)
+{
+	// get box
+	std::vector<std::vector<float> > vecBox;
+	for (int i = 0; i < children.size(); i++)
+	{
+		std::vector<float> box;
+		mapBox.Find(children[i], &box);
+		vecBox.push_back(box);
+//		fprintf(stderr, "children%d: %s \n", i, children[i].c_str());
+	}
+
+	int iMax, jMax;
+	iMax = jMax = -1;
+	double groupnessMax;
+	groupnessMax = -999999;
+	for (int i = 0; i < vecBox.size(); i++)
+	{
+		for (int j = 0; j < vecBox.size(); j++)
+		{
+			if (i >= j)	continue;
+			double cenx1, ceny1, cenz1, cenx2, ceny2, cenz2;
+			cenx1 = (vecBox[i][0] + vecBox[i][3]) / 2;
+			ceny1 = (vecBox[i][1] + vecBox[i][4]) / 2;
+			cenz1 = (vecBox[i][2] + vecBox[i][5]) / 2;
+			cenx2 = (vecBox[j][0] + vecBox[j][3]) / 2;
+			ceny2 = (vecBox[j][1] + vecBox[j][4]) / 2;
+			cenz2 = (vecBox[j][2] + vecBox[j][5]) / 2;
+			double cenDis, sizeSimilarity, heightSimilarity, length1, length2;
+			length1 = sqrt(pow(vecBox[i][0] - vecBox[i][3], 2) + pow(vecBox[i][1] - vecBox[i][4], 2) + pow(vecBox[i][2] - vecBox[i][5], 2));
+			length2 = sqrt(pow(vecBox[j][0] - vecBox[j][3], 2) + pow(vecBox[j][1] - vecBox[j][4], 2) + pow(vecBox[j][2] - vecBox[j][5], 2));
+			cenDis = sqrt(pow(cenx1 - cenx2, 2) + pow(ceny1 - ceny2, 2) + pow(cenz1 - cenz2, 2));
+			sizeSimilarity = length1 / length2;
+			if (sizeSimilarity > 1)	sizeSimilarity = 1 / sizeSimilarity;
+			int height1, height2;
+			GetNodeHeight(children[i], height1);
+			GetNodeHeight(children[j], height2);
+			
+			heightSimilarity = pow(2.0, -height1) * pow(2.0, -height2);
+			double groupnessTmp;
+			groupnessTmp = (length1 + length2) / cenDis * sizeSimilarity * heightSimilarity;
+//			groupnessTmp = levelSimilarity;
+			
+			
+			/*
+			fprintf(stderr, "i, j: %d,%d \n", i, j);
+			fprintf(stderr, "level1, level2: %d,%d \n", level1, level2);
+			fprintf(stderr, "levelSimilarity: %f \n", levelSimilarity);
+			fprintf(stderr, "node names are: %s,%s \n", children[i].c_str(), children[j].c_str());
+			fprintf(stderr, "box1: %f,%f,%f,%f,%f,%f\n", vecBox[i][0], vecBox[i][1], vecBox[i][2], vecBox[i][3], vecBox[i][4], vecBox[i][5]);
+			fprintf(stderr, "box2: %f,%f,%f,%f,%f,%f\n", vecBox[j][0], vecBox[j][1], vecBox[j][2], vecBox[j][3], vecBox[j][4], vecBox[j][5]);
+			fprintf(stderr, "cen1: %f,%f,%f\n", cenx1, ceny1, cenz1);
+			fprintf(stderr, "cen2: %f,%f,%f\n", cenx2, ceny2, cenz2);
+			fprintf(stderr, "length1, length2, cenDis: %f,%f,%f \n", length1, length2, cenDis);
+			fprintf(stderr, "groupness: %f \n\n", groupnessTmp);
+			*/
+			if (groupnessMax < groupnessTmp)
+			{
+				groupnessMax = groupnessTmp;
+				iMax = i;
+				jMax = j;
+			}
+		}
+	}
+	node1 = children[iMax];
+	node2 = children[jMax];
+	groupness = groupnessMax;
+	fprintf(stderr, "iMax, jMax, groupnessMax: %d, %d, %f \n", iMax, jMax, groupness);
+}
+
+
+void R3Scene::
+MergeNodes(std::string node1, std::string node2)
+{
+	std::string new_node = "merge_" + num2str(newNodeNum);
+	fprintf(stderr, "%s & %s merge to %s \n", node1.c_str(), node2.c_str(), new_node.c_str());
+	nodeIDs[nodeIDsNum] = new_node;
+	nodeIDsNum++;
+	newNodeNum++;
+	fprintf(stderr, "have %d nodes now, %d are new\n", nodeIDsNum, newNodeNum);
+	
+	std::string node1_father;
+	mapFather.Find(node1, &node1_father);
+	mapFather.Insert(node1, new_node);
+	mapFather.Insert(node2, new_node);
+	mapFather.Insert(new_node, node1_father);
+	
+	fprintf(stderr, "UpdataMapChildren\n");
+	UpdataMapChildren();
+
+	std::vector<float> box1, box2, new_box(6);
+	mapBox.Find(node1, &box1);
+	mapBox.Find(node2, &box2);
+	if (box1.size() > 0 && box2.size() > 0)
+	{
+		new_box[0] = std::max(box1[0], box2[0]);
+		new_box[1] = std::max(box1[1], box2[1]);
+		new_box[2] = std::max(box1[2], box2[2]);
+		new_box[3] = std::min(box1[3], box2[3]);
+		new_box[4] = std::min(box1[4], box2[4]);
+		new_box[5] = std::min(box1[5], box2[5]);
+	}
+	else if (box1.size() > 0 && box2.size() == 0)
+	{
+		new_box = box1;
+	}
+	else if (box1.size() == 0 && box2.size() > 0)
+	{
+		new_box = box2;
+	}
+
+//	fprintf(stderr, "new box: %f,%f,%f,%f,%f,%f\n", new_box[0], new_box[1], new_box[2], new_box[3], new_box[4], new_box[5]);
+	mapBox.Insert(new_node, new_box);
+
+	mapValid.Insert(node1, false);
+	mapValid.Insert(node2, false);
+	mapValid.Insert(new_node, true);
+}
+
+void R3Scene::
+UpdataMapChildren()
+{
+	childrenAll.clear();
+	childrenAll.resize(nodeIDsNum*5);
+	mapChildren.Empty();
+
+	for (int i = 0; i < nodeIDsNum; i++)
+	{
+		std::string child = nodeIDs[i];
+		std::string father;
+		mapFather.Find(child, &father);
+		if (father.length() <= 0)	continue;
+
+		mapChildren.Find(father, &childrenAll[i]);
+		std::vector<std::string>::iterator s = std::find(childrenAll[i].begin(), childrenAll[i].end(), child);
+		if (s == childrenAll[i].end())
+		{
+			childrenAll[i].push_back(child);
+			mapChildren.Insert(father, childrenAll[i]);
+		}
+		
+		// check if father in nodeIDs
+		bool existFlag = false;
+		for (int j = 0; j < nodeIDsNum; j++)
+		{
+			if (father == nodeIDs[j])
+			{
+				existFlag = true;
+				break;
+			}
+		}
+		if (!existFlag)
+		{
+			nodeIDs[nodeIDsNum] = father;
+			nodeIDsNum++;
+
+			fprintf(stderr, "add node %s, ", father.c_str());
+			fprintf(stderr, "have %d nodes now \n", nodeIDsNum);
+		}
+	}
+
+	for (int i = 0; i < nodeIDsNum; i++)
+	{
+		std::string child = nodeIDs[i];
+		std::string father;
+		mapFather.Find(child, &father);
+		if (father.length() <= 0)	continue;
+
+		std::vector<std::string> children;
+		mapChildren.Find(father, &children);
+//		fprintf(stderr, "i %d \n", i);
+
+//		fprintf(stderr, "/////////////father %s \n", father.c_str());
+		for (int i = 0; i < children.size(); i++)
+		{
+//			fprintf(stderr, "/////////////children %s \n", children[i].c_str());
+		}
+//		fprintf(stderr, "\n");
+	}
+}
+
+void R3Scene::GetNodeHeight(std::string node, int &height)
+{
+	std::vector<std::string> children;
+	mapChildren.Find(node, &children);
+	if (children.size() == 0)
+	{
+		height = 1;
+	}
+	else
+	{
+		int heightMax = -1;
+		for (int i = 0; i < children.size(); i++)
+		{
+			int heightTmp;
+			GetNodeHeight(children[i], heightTmp);
+			if (heightMax < heightTmp)	heightMax = heightTmp;
+		}
+		height = heightMax + 1;
+	}
+}
+
+std::string R3Scene::num2str(double i)
+{
+	std::stringstream ss;
+	ss << i;
+	return ss.str();
 }

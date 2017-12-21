@@ -1,6 +1,6 @@
 /* Include file for the R3 scene class */
-
-
+#include <vector>
+#include<algorithm>
 
 /* Initialization functions */
 
@@ -108,6 +108,7 @@ public:
   int ReadSupportHierarchyFile(const char *filename, R3SceneNode *parent_node = NULL);
   int ReadGrammarHierarchyFile(const char *filename, R3SceneNode *parent_node = NULL);
   int ReadRectangleFile(const char *filename, R3SceneNode *parent_node = NULL);
+  int ReadStatsFile(const char *filename, R3SceneNode *parent_node = NULL);
   int WriteFile(const char *filename) const;
   int WriteObjFile(const char *filename) const;
   int WritePrincetonFile(const char *filename) const;
@@ -124,7 +125,14 @@ public:
   int ReadSUNCGModelFile(const char *filename);
   int WriteOBBFile(char *filename, R3Scene *scene, R3SceneNode *node);
   int WriteRoomFile(const char *scene_name, char *filename, char *room_type, R3Scene *scene, R3SceneNode *node);
-  
+  int BuildSceneHierarchy();
+  int BinarizeNode(std::string root);
+  void SelectGroupNodes(std::vector<std::string> children, std::string &node1, std::string &node2, double &groupness);
+  void MergeNodes(std::string node1, std::string node2);
+  void UpdataMapChildren();
+  void GetNodeHeight(std::string node, int &height);
+  std::string num2str(double i);
+
 private:
   R3SceneNode *root;
   RNArray<R3SceneNode *> nodes;
@@ -140,6 +148,23 @@ private:
   char *filename;
   char *name;
   void *data;
+  // data structure for relation hierarchy
+  RNMap<std::string, std::string> mapFather;
+  RNMap<std::string, std::vector<std::string> > mapChildren;
+  std::vector<std::vector<std::string> > childrenAll;
+  RNMap<std::string, std::vector<float> > mapBox;
+  RNMap<std::string, bool> mapValid;
+  std::string *nodeIDs;
+  int nodeIDsNum;
+  int newNodeNum;
+  /*
+  // data structure for binary hierarchy
+  RNMap<std::string, std::string> mapFatherBinary;
+  RNMap<std::string, std::vector<std::string> > mapChildrenBinary;
+  RNMap<std::string, std::vector<float> > mapBoxBinary;
+  std::string *nodeIDsBinary;
+  int nodeIDsNumBinary;
+  */
 };
 
 
