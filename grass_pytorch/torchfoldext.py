@@ -30,6 +30,10 @@ class FoldExt(Fold):
         res = []
         for arg in arg_lists:
             r = []
+#            print('arg[0]')
+#            print(arg[0])
+#            print('Fold.Node')
+#            print(Fold.Node)
             if isinstance(arg[0], Fold.Node):
                 if arg[0].batch:
                     for x in arg:

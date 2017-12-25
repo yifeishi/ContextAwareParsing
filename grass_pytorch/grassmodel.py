@@ -3,6 +3,7 @@ import torch
 from torch import nn
 from torch.autograd import Variable
 from time import time
+import numpy as np
 
 #########################################################################################
 ## Encoder
@@ -76,7 +77,7 @@ class GRASSEncoder(nn.Module):
 
     def __init__(self, config):
         super(GRASSEncoder, self).__init__()
-        self.box_encoder = BoxEncoder(input_size = config.box_code_size, feature_size = config.feature_size)
+        self.box_encoder = BoxEncoder(input_size = config.obj_code_size, feature_size = config.feature_size)
         self.adj_encoder = AdjEncoder(feature_size = config.feature_size, hidden_size = config.hidden_size)
         self.sym_encoder = SymEncoder(feature_size = config.feature_size, symmetry_size = config.symmetry_size, hidden_size = config.hidden_size)
         self.sample_encoder = Sampler(feature_size = config.feature_size, hidden_size = config.hidden_size)
@@ -94,7 +95,6 @@ class GRASSEncoder(nn.Module):
         return self.sample_encoder(feature)
 
 def encode_structure_fold(fold, tree):
-
     def encode_node(node):
         if node.is_leaf():
             return fold.add('boxEncoder', node.box)
@@ -188,7 +188,7 @@ class BoxDecoder(nn.Module):
 
     def forward(self, parent_feature):
         vector = self.mlp(parent_feature)
-        vector = self.tanh(vector)
+#        vector = self.tanh(vector)
         return vector
 
 class GRASSDecoder(nn.Module):
@@ -203,30 +203,56 @@ class GRASSDecoder(nn.Module):
         self.creLoss = nn.CrossEntropyLoss()  # pytorch's cross entropy loss (NOTE: no softmax is needed before)
 
     def boxDecoder(self, feature):
+#        print('boxDecoder')
         return self.box_decoder(feature)
 
     def adjDecoder(self, feature):
+#        print('adjDecoder')
         return self.adj_decoder(feature)
 
     def symDecoder(self, feature):
+#        print('symDecoder')
         return self.sym_decoder(feature)
 
     def sampleDecoder(self, feature):
+#        print('sampleDecoder')
         return self.sample_decoder(feature)
 
     def nodeClassifier(self, feature):
+#        print('nodeClassifier')
         return self.node_classifier(feature)
 
     def boxLossEstimator(self, box_feature, gt_box_feature):
-        return torch.cat([self.mseLoss(b, gt).mul(0.4) for b, gt in zip(box_feature, gt_box_feature)], 0)
+        gt_box_feature_last6 = np.zeros(box_feature.shape)
+        for i in range(0,6):
+            for j in range(0,gt_box_feature_last6.shape[0]):
+                gt_box_feature_last6[j][i] = gt_box_feature[j][2048+i].data.cpu().numpy()
+                """
+                print('..................')
+                print('i:%d j:%d' %(i,j))
+                print(gt_box_feature[j][2048+i].data)
+                print(gt_box_feature_last6[j][i])
+                """
+        gt_box_feature_last6 = Variable(torch.from_numpy(gt_box_feature_last6).float().cuda(), requires_grad=False)
+        """
+        print('boxLossEstimator')
+        print('box_feature',end='')
+        print(box_feature)
+        print('gt_box_feature_last6',end='')
+        print(gt_box_feature_last6)
+        """
+        return torch.cat([self.mseLoss(b, gt).mul(0.4) for b, gt in zip(box_feature, gt_box_feature_last6)], 0)
 
     def symLossEstimator(self, sym_param, gt_sym_param):
+#        print('symLossEstimator')
         return torch.cat([self.mseLoss(s, gt).mul(0.5) for s, gt in zip(sym_param, gt_sym_param)], 0)
 
     def classifyLossEstimator(self, label_vector, gt_label_vector):
+#        print('classifyLossEstimator')
         return torch.cat([self.creLoss(l.unsqueeze(0), gt).mul(0.2) for l, gt in zip(label_vector, gt_label_vector)], 0)
 
     def vectorAdder(self, v1, v2):
+#        print('vectorAdder')
         return v1.add_(v2)
 
 

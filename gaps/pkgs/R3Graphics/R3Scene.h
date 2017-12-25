@@ -125,13 +125,14 @@ public:
   int ReadSUNCGModelFile(const char *filename);
   int WriteOBBFile(char *filename, R3Scene *scene, R3SceneNode *node);
   int WriteRoomFile(const char *scene_name, char *filename, char *room_type, R3Scene *scene, R3SceneNode *node);
-  int BuildSceneHierarchy();
+  int BuildSceneHierarchy(char *outdir);
   int BinarizeNode(std::string root);
   void SelectGroupNodes(std::vector<std::string> children, std::string &node1, std::string &node2, double &groupness);
   void MergeNodes(std::string node1, std::string node2);
   void UpdataMapChildren();
   void GetNodeHeight(std::string node, int &height);
   std::string num2str(double i);
+  void WriteChildToFile(const char * filename, std::string node);
 
 private:
   R3SceneNode *root;
@@ -153,18 +154,11 @@ private:
   RNMap<std::string, std::vector<std::string> > mapChildren;
   std::vector<std::vector<std::string> > childrenAll;
   RNMap<std::string, std::vector<float> > mapBox;
+  RNMap<std::string, std::string> mapModelID;
   RNMap<std::string, bool> mapValid;
   std::string *nodeIDs;
   int nodeIDsNum;
   int newNodeNum;
-  /*
-  // data structure for binary hierarchy
-  RNMap<std::string, std::string> mapFatherBinary;
-  RNMap<std::string, std::vector<std::string> > mapChildrenBinary;
-  RNMap<std::string, std::vector<float> > mapBoxBinary;
-  std::string *nodeIDsBinary;
-  int nodeIDsNumBinary;
-  */
 };
 
 

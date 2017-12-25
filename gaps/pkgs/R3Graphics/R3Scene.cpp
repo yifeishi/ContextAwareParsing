@@ -3568,19 +3568,22 @@ ReadSUNCGFile(const char *filename, R3SceneNode *parent_node)
         int hideCeiling = 0, hideFloor = 0, hideWalls = 0;
         int isMirrored = 0, state = 0;
 		std::string node_id_string;
+		std::string model_id_string;
         if (GetJsonObjectMember(json_value, json_node, "valid"))
           if (!json_value->asString().compare(std::string("0")))  continue;
 		if (GetJsonObjectMember(json_value, json_node, "id"))
 		{
 			strncpy(node_id, json_value->asString().c_str(), 1024);
-//			strncpy(nodeIDs[index], json_value->asString().c_str(), 1024);
 			node_id_string = nodeIDs[index] = json_value->asString();
 			nodeIDsNum++;
 		}
         if (GetJsonObjectMember(json_value, json_node, "type")) 
           strncpy(node_type, json_value->asString().c_str(), 1024);
-        if (GetJsonObjectMember(json_value, json_node, "modelId"))
-          strncpy(modelId, json_value->asString().c_str(), 1024);
+		if (GetJsonObjectMember(json_value, json_node, "modelId"))
+		{
+			strncpy(modelId, json_value->asString().c_str(), 1024);
+			model_id_string = json_value->asString();
+		}
         if (GetJsonObjectMember(json_value, json_node, "hideCeiling")) 
           if (!json_value->asString().compare(std::string("1"))) hideCeiling = 1;
         if (GetJsonObjectMember(json_value, json_node, "hideFloor")) 
@@ -3754,10 +3757,17 @@ ReadSUNCGFile(const char *filename, R3SceneNode *parent_node)
 		}
 		
 		mapBox.Insert(node_id_string, vecBox);
-		std::vector<float> search;
-		mapBox.Find(node_id_string, &search);
-//		fprintf(stderr, "node_id_string  %s\n", node_id_string.c_str());
-//		fprintf(stderr, "search0  %f\n", search[0]);
+		if(!strcmp(node_type, "Object"))
+			mapModelID.Insert(node_id_string, model_id_string);
+		/*
+		std::vector<float> search1;
+		mapBox.Find(node_id_string, &search1);
+		std::string search2;
+		mapModelID.Find(node_id_string, &search2);
+		fprintf(stderr, "node_id_string  %s\n", node_id_string.c_str());
+		fprintf(stderr, "search1  %f\n", search1[0]);
+		fprintf(stderr, "search2  %s\n\n", search2.c_str());
+		*/
       }
 
       // Move created nodes to be children of room nodes
@@ -4090,14 +4100,11 @@ WriteOBBFile(char *filename, R3Scene *scene, R3SceneNode *node)
   if (!strcmp(node_type, "Room"))
   {
     char *tmp;
-    char* delims = "_"; // search _ in filename
+    char *delims = "_"; // search _ in filename
     tmp = strtok(filename,delims);
-//    printf("tmp %s \n",tmp);
     strcat(tmp,"_");
     strcat(tmp, node_id);
-//    printf("tmp %s \n",tmp);
     strcat(tmp, ".txt");
-//    printf("tmp %s \n",tmp);
     strcpy(filename, tmp);
     fprintf(stderr, "Write to %s\n",filename);
 
@@ -4115,8 +4122,10 @@ WriteOBBFile(char *filename, R3Scene *scene, R3SceneNode *node)
 
   // Write file
   if (node->Info("model_id") && node->Info("coarse_grained_class") && node->BBox().XMax() > -10000 && node->BBox().XMax() < 10000) {
-    const char *value_id = node->Info("model_id");
-    fprintf(fp, "%s %f %f %f %f %f %f \n", value_id, node->BBox().XMax(), node->BBox().YMax(), node->BBox().ZMax(), node->BBox().XMin(), node->BBox().YMin(), node->BBox().ZMin());
+	const char *model_id = node->Info("model_id");
+	const char *node_name = node->Name();
+	const char *coarse_class = node->Info("coarse_grained_class");
+    fprintf(fp, "%s %s %s %f %f %f %f %f %f \n", node_name, model_id, coarse_class, node->BBox().XMax(), node->BBox().YMax(), node->BBox().ZMax(), node->BBox().XMin(), node->BBox().YMin(), node->BBox().ZMin());
 //    fprintf(fp, "model_id: %s \n", value_id);
 //    const char *value_class = node->Info("coarse_grained_class");
 //    fprintf(fp, "class: %s \n \n", value_class);
@@ -4242,9 +4251,8 @@ ReadStatsFile(const char *filename, R3SceneNode *parent_node)
 
 
 int R3Scene::
-BuildSceneHierarchy()
+BuildSceneHierarchy(char *outdir)
 {
-	fprintf(stderr, "UpdataMapChildren\n");
 	UpdataMapChildren();
 
 	// initialize map valid
@@ -4296,8 +4304,43 @@ BuildSceneHierarchy()
 		}
 	} while (processedFlag);
 
+	// hierarchy output
+	// find root
+	std::vector<std::string> vecRoot;
+	for (int i = 0; i < nodeIDsNum; i++)
+	{
+		std::string father;
+		mapFather.Find(nodeIDs[i], &father);
+		std::vector<std::string> children;
+		mapChildren.Find(nodeIDs[i], &children);
+		if (father.length() == 0 && children.size() > 0)
+		{
+			vecRoot.push_back(nodeIDs[i]);
+			fprintf(stderr, "the %d root %s, children: %s, %s \n", vecRoot.size(), nodeIDs[i].c_str(), children[0].c_str(), children[1].c_str());
+			char filename[1024]; 
+			char tmp[1024];
+			
+			strcpy(tmp, outdir);
+			fprintf(stderr, "Write to %s\n", outdir);
+			strcat(tmp, "/hier_");
+			fprintf(stderr, "Write to %s\n", tmp);
+			strcat(tmp, nodeIDs[i].c_str()); 
+			fprintf(stderr, "Write to %s\n", tmp); 
+			strcat(tmp, ".txt");
+			strcpy(filename, tmp);
+			fprintf(stderr, "Write to %s\n", filename);
+
+			// Clean file
+			FILE *fpClean = fopen(filename, "w");
+			fclose(fpClean);
+
+			WriteChildToFile(filename, nodeIDs[i]);
+		}
+	}
+
 	return 1;
 }
+
 
 int R3Scene::
 BinarizeNode(std::string root)
@@ -4452,9 +4495,11 @@ MergeNodes(std::string node1, std::string node2)
 	mapValid.Insert(new_node, true);
 }
 
+
 void R3Scene::
 UpdataMapChildren()
 {
+	fprintf(stderr, "UpdataMapChildren\n");
 	childrenAll.clear();
 	childrenAll.resize(nodeIDsNum*5);
 	mapChildren.Empty();
@@ -4514,7 +4559,9 @@ UpdataMapChildren()
 	}
 }
 
-void R3Scene::GetNodeHeight(std::string node, int &height)
+
+void R3Scene::
+GetNodeHeight(std::string node, int &height)
 {
 	std::vector<std::string> children;
 	mapChildren.Find(node, &children);
@@ -4535,9 +4582,38 @@ void R3Scene::GetNodeHeight(std::string node, int &height)
 	}
 }
 
-std::string R3Scene::num2str(double i)
+
+std::string R3Scene::
+num2str(double i)
 {
 	std::stringstream ss;
 	ss << i;
 	return ss.str();
+}
+
+
+void R3Scene::
+WriteChildToFile(const char * filename, std::string node)
+{
+	std::vector<std::string> children;
+	mapChildren.Find(node, &children);
+	for (int i = 0; i < children.size(); i++)
+	{
+		FILE *fp = fopen(filename, "a");
+		if (!fp) {
+			fprintf(stderr, "Unable to open file %s", filename);
+			return;
+		}
+		std::string model_id_string;
+		if (!mapModelID.Find(children[i].c_str(), &model_id_string))
+			fprintf(fp, "%s %s null\n", node.c_str(), children[i].c_str());
+		else
+			fprintf(fp, "%s %s %s\n", node.c_str(), children[i].c_str(), model_id_string.c_str());
+		fclose(fp);
+	}
+
+	for (int i = 0; i < children.size(); i++)
+	{
+		WriteChildToFile(filename, children[i]);
+	}
 }

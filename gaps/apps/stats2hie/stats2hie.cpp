@@ -13,6 +13,7 @@
 
 static char *input_scene_name = NULL;
 static char *input_stats_name = NULL;
+static char *output_hier_dir = NULL;
 static char *output_image_name = NULL;
 static char *input_cameras_name = NULL;
 static char *input_lights_name = NULL;
@@ -918,14 +919,14 @@ ReadStats(char *filename)
 }
 
 static R3Scene *
-BuildHierarchy(R3Scene *scene)
+BuildHierarchy(R3Scene *scene, char *outdir)
 {
 	// Start statistics
 	RNTime start_time;
 	start_time.Read();
 
 	// Read scene from file
-	if (!scene->BuildSceneHierarchy()) {
+	if (!scene->BuildSceneHierarchy(outdir)) {
 		return NULL;
 	}
 
@@ -1073,6 +1074,7 @@ ParseArgs(int argc, char **argv)
       else if (!strcmp(*argv, "-room_type")) { argc--; argv++; room_type = *argv; }
 	  else if (!strcmp(*argv, "-room_txt")) { argc--; argv++; output_room_filename = *argv; }
 	  else if (!strcmp(*argv, "-input_stats")) { argc--; argv++; input_stats_name = *argv; }
+	  else if (!strcmp(*argv, "-output_hier")) { argc--; argv++; output_hier_dir = *argv; }
       else if (!strcmp(*argv, "-hide_faces")) show_faces = 0;
       else if (!strcmp(*argv, "-show_faces")) show_faces = 1;
       else if (!strcmp(*argv, "-show_edges")) show_edges = 1;
@@ -1160,7 +1162,7 @@ int main(int argc, char **argv)
 
   // Build hierarchy
   fprintf(stderr, "BuildHierarchy\n \n");
-  scene = BuildHierarchy(scene);
+  scene = BuildHierarchy(scene, output_hier_dir);
   if (!scene) exit(-1);
 
   // Return success
