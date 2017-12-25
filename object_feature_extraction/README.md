@@ -4,7 +4,6 @@ The features are:
 
 - feature of multi-view images
 - feature of OBB
-- feature of voxels
 
 ## feature of multi-view images
 
@@ -18,6 +17,7 @@ python mtl2mtl_suncg_object.py
 
 2. render multi-view images
 ```python
+cd RenderForCNN-master
 cd demo_render
 python run_demo.py
 ```

@@ -1,6 +1,9 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
+# input: train_test_split/SUNCG_train_sceneId.txt, room_list/*_room.txt, house/*/hier_*.txt, house/*/obb_*.txt, object/*/obj_img/feature.txt
+# output: room_feature/*_room_feature.mat
+
 import os
 import sys
 import scipy.io as sio
