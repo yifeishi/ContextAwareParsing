@@ -6,7 +6,7 @@ The components are:
 - train_test_split: get train & test split by cell2txt
 - stats2hie_batch: generate hierarchy for suncg rooms
 - visulization: visualize room hierarchy (should have object images)
-- grass_data_gen: generate training data for grass code ()
+- grass_data_gen: generate training data for grass code
 
 1. room_select
 ```python
