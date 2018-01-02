@@ -8,6 +8,10 @@ g_suncg_object_path = '/n/fs/deepfusion/users/yifeis/sceneparsing/data/object'
 def tree_vis(hier_name):
     # build an tree
     t = Tree()
+    file_object2 = open(hier_name,'r')
+    lines = file_object2.readlines()
+    if(len(lines)<5):
+        return 0
     file_object1 = open(hier_name,'r')
     try:
         count = 0
@@ -54,15 +58,16 @@ for house_dir in suncg_sub_dir:
     print(house_dir)
     file_names = os.listdir(os.path.join(g_suncg_house_path,house_dir))
     for file_name in file_names:
-        L = file_name.split('_')
-        if L[0] != 'hier':
+        if file_name.split('_')[0] != 'hier' or file_name.split('.')[len(file_name.split('.'))-1] != 'txt':
             continue
         img_out_name = file_name.split('.')[0] + '.png'
         t = tree_vis(os.path.join(g_suncg_house_path,house_dir,file_name))
+        if t==0:
+            continue
         ts = TreeStyle()
         ts.layout_fn = mylayout
         ts.show_leaf_name = True
         ts.scale =  0.5
         ts.rotation = 90
-        t.render(os.path.join(g_suncg_house_path,house_dir,img_out_name), w=2000, tree_style = ts)   
+        t.render(os.path.join(g_suncg_house_path,house_dir,img_out_name), w=1000, tree_style = ts)   
 

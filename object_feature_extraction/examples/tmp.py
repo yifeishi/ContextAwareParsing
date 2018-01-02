@@ -22,7 +22,7 @@ tf_img = utils.TransformImage(model)
 g_suncg_object_path = '/data/05/deepfusion/users/yifeis/sceneparsing/data/object'
 suncg_sub_dir = os.listdir(g_suncg_object_path)
 for obj_dir in suncg_sub_dir:
-    for i in range(0,5):
+    for i in range(5,9):
         path_img = os.path.join(g_suncg_object_path,obj_dir,'rgb_img',str(i)+'.png')
         print(path_img)
         input_img = load_img(path_img)
@@ -34,12 +34,12 @@ for obj_dir in suncg_sub_dir:
         output_features = output_features[:, np.newaxis]
         output_features = output_features.transpose()
 
-        if i == 0:
+        if i == 5:
             output_features_sum = output_features
         else:
             output_features_sum = np.vstack((output_features_sum,output_features))
 
-    np.savetxt(os.path.join(g_suncg_object_path,obj_dir,'rgb_img','feature.txt'),output_features_sum, fmt="%f", delimiter="  ")
+    np.savetxt(os.path.join(g_suncg_object_path,obj_dir,'rgb_img','feature_new.txt'),output_features_sum, fmt="%f", delimiter="  ")
 
 """
 path_img = '/data/05/deepfusion/users/yifeis/sceneparsing/data/object/43/rgb_img/1.png'

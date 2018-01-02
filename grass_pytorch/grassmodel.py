@@ -10,7 +10,6 @@ import numpy as np
 #########################################################################################
 
 class Sampler(nn.Module):
-
     def __init__(self, feature_size, hidden_size):
         super(Sampler, self).__init__()
         self.mlp1 = nn.Linear(feature_size, hidden_size)
@@ -19,16 +18,20 @@ class Sampler(nn.Module):
         self.tanh = nn.Tanh()
         
     def forward(self, input):
-        encode = self.tanh(self.mlp1(input))
+        return input
+#        return torch.cat([input, input], 1)
+        """
+        #encode = self.tanh(self.mlp1(input))
+        encode = self.mlp1(input)
         mu = self.mlp2mu(encode)
         logvar = self.mlp2var(encode)
         std = logvar.mul(0.5).exp_() # calculate the STDEV
         eps = Variable(torch.FloatTensor(std.size()).normal_().cuda()) # random normalized noise
         KLD_element = mu.pow(2).add_(logvar.exp()).mul_(-1).add_(1).add_(logvar)
         return torch.cat([eps.mul(std).add_(mu), KLD_element], 1)
+        """
 
 class BoxEncoder(nn.Module):
-
     def __init__(self, input_size, feature_size):
         super(BoxEncoder, self).__init__()
         self.encoder = nn.Linear(input_size, feature_size)
@@ -54,10 +57,10 @@ class AdjEncoder(nn.Module):
         output = self.tanh(output)
         output = self.second(output)
         output = self.tanh(output)
+
         return output
 
 class SymEncoder(nn.Module):
-
     def __init__(self, feature_size, symmetry_size, hidden_size):
         super(SymEncoder, self).__init__()
         self.left = nn.Linear(feature_size, hidden_size)
@@ -72,9 +75,8 @@ class SymEncoder(nn.Module):
         output = self.second(output)
         output = self.tanh(output)
         return output
-
+"""
 class GRASSEncoder(nn.Module):
-
     def __init__(self, config):
         super(GRASSEncoder, self).__init__()
         self.box_encoder = BoxEncoder(input_size = config.obj_code_size, feature_size = config.feature_size)
@@ -93,22 +95,19 @@ class GRASSEncoder(nn.Module):
 
     def sampleEncoder(self, feature):
         return self.sample_encoder(feature)
+"""
 
-def encode_structure_fold(fold, tree):
-    def encode_node(node):
-        if node.is_leaf():
-            return fold.add('boxEncoder', node.box)
-        elif node.is_adj():
-            left = encode_node(node.left)
-            right = encode_node(node.right)
-            return fold.add('adjEncoder', left, right)
-        elif node.is_sym():
-            feature = encode_node(node.left)
-            sym = node.sym
-            return fold.add('symEncoder', feature, sym)
 
-    encoding = encode_node(tree.root)
-    return fold.add('sampleEncoder', encoding)
+
+
+def decode_structure_fold(fold, feature, tree):
+    
+        
+    feature = fold.add('sampleDecoder', feature)
+    loss = decode_node_box(tree.root, feature)
+    return loss
+
+
 
 #########################################################################################
 ## Decoder
@@ -120,14 +119,15 @@ class NodeClassifier(nn.Module):
         super(NodeClassifier, self).__init__()
         self.mlp1 = nn.Linear(feature_size, hidden_size)
         self.tanh = nn.Tanh()
-        self.mlp2 = nn.Linear(hidden_size, 3)
-        #self.softmax = nn.Softmax()
+        self.mlp2 = nn.Linear(hidden_size, 100)
+        self.softmax = nn.Softmax()
 
     def forward(self, input_feature):
         output = self.mlp1(input_feature)
         output = self.tanh(output)
         output = self.mlp2(output)
-        #output = self.softmax(output)
+#        output = self.softmax(output)
+
         return output
 
 class SampleDecoder(nn.Module):
@@ -139,9 +139,14 @@ class SampleDecoder(nn.Module):
         self.tanh = nn.Tanh()
         
     def forward(self, input_feature):
+        return input_feature
+        """
         output = self.tanh(self.mlp1(input_feature))
         output = self.tanh(self.mlp2(output))
+#        output = self.mlp1(input_feature)
+#        output = self.mlp2(output)
         return output
+        """
 
 class AdjDecoder(nn.Module):
     """ Decode an input (parent) feature into a left-child and a right-child feature """
@@ -152,12 +157,16 @@ class AdjDecoder(nn.Module):
         self.mlp_right = nn.Linear(hidden_size, feature_size)
         self.tanh = nn.Tanh()
 
-    def forward(self, parent_feature):
+    def forward(self, parent_feature, left_encode_feature, right_encode_feature): # def forward(self, parent_feature, left_encode_feature, right_encode_feature):
         vector = self.mlp(parent_feature)
         vector = self.tanh(vector)
-        left_feature = self.mlp_left(vector)
+        vector_left = self.mlp(left_encode_feature)
+        vector_left = self.tanh(vector_left)
+        vector_right = self.mlp(left_encode_feature)
+        vector_right = self.tanh(vector_right)
+        left_feature = self.mlp_left(vector) + self.mlp_left(vector_right)
         left_feature = self.tanh(left_feature)
-        right_feature = self.mlp_right(vector)
+        right_feature = self.mlp_right(vector)  + self.mlp_right(vector_left)
         right_feature = self.tanh(right_feature)
         return left_feature, right_feature
 
@@ -191,6 +200,7 @@ class BoxDecoder(nn.Module):
 #        vector = self.tanh(vector)
         return vector
 
+"""
 class GRASSDecoder(nn.Module):
     def __init__(self, config):
         super(GRASSDecoder, self).__init__()
@@ -203,89 +213,58 @@ class GRASSDecoder(nn.Module):
         self.creLoss = nn.CrossEntropyLoss()  # pytorch's cross entropy loss (NOTE: no softmax is needed before)
 
     def boxDecoder(self, feature):
-#        print('boxDecoder')
         return self.box_decoder(feature)
 
     def adjDecoder(self, feature):
-#        print('adjDecoder')
         return self.adj_decoder(feature)
 
     def symDecoder(self, feature):
-#        print('symDecoder')
         return self.sym_decoder(feature)
 
     def sampleDecoder(self, feature):
-#        print('sampleDecoder')
         return self.sample_decoder(feature)
 
     def nodeClassifier(self, feature):
-#        print('nodeClassifier')
         return self.node_classifier(feature)
 
     def boxLossEstimator(self, box_feature, gt_box_feature):
         gt_box_feature_last6 = np.zeros(box_feature.shape)
         for i in range(0,6):
             for j in range(0,gt_box_feature_last6.shape[0]):
+                # jerrysyf
                 gt_box_feature_last6[j][i] = gt_box_feature[j][2048+i].data.cpu().numpy()
-                """
+                #gt_box_feature_last6[j][i] = gt_box_feature[j][i].data.cpu().numpy()
+                
                 print('..................')
                 print('i:%d j:%d' %(i,j))
                 print(gt_box_feature[j][2048+i].data)
                 print(gt_box_feature_last6[j][i])
-                """
+                
         gt_box_feature_last6 = Variable(torch.from_numpy(gt_box_feature_last6).float().cuda(), requires_grad=False)
-        """
-        print('boxLossEstimator')
-        print('box_feature',end='')
+        if gt_box_feature_last6[0][0].data.cpu().numpy() == 1:
+            box_feature = gt_box_feature_last6
+        
+        print('boxLossEstimator...................')
+        print('box',end='')
         print(box_feature)
-        print('gt_box_feature_last6',end='')
+        print('gt',end='')
         print(gt_box_feature_last6)
-        """
+        
         return torch.cat([self.mseLoss(b, gt).mul(0.4) for b, gt in zip(box_feature, gt_box_feature_last6)], 0)
 
     def symLossEstimator(self, sym_param, gt_sym_param):
-#        print('symLossEstimator')
         return torch.cat([self.mseLoss(s, gt).mul(0.5) for s, gt in zip(sym_param, gt_sym_param)], 0)
 
     def classifyLossEstimator(self, label_vector, gt_label_vector):
-#        print('classifyLossEstimator')
         return torch.cat([self.creLoss(l.unsqueeze(0), gt).mul(0.2) for l, gt in zip(label_vector, gt_label_vector)], 0)
-
+        
     def vectorAdder(self, v1, v2):
-#        print('vectorAdder')
         return v1.add_(v2)
 
+    def tensor2Node(self, v):
+        return v
 
-def decode_structure_fold(fold, feature, tree):
-    
-    def decode_node_box(node, feature):
-        if node.is_leaf():
-            box = fold.add('boxDecoder', feature)
-            recon_loss = fold.add('boxLossEstimator', box, node.box)
-            label = fold.add('nodeClassifier', feature)
-            label_loss = fold.add('classifyLossEstimator', label, node.label)
-            return fold.add('vectorAdder', recon_loss, label_loss)
-        elif node.is_adj():
-            left, right = fold.add('adjDecoder', feature).split(2)
-            left_loss = decode_node_box(node.left, left)
-            right_loss = decode_node_box(node.right, right)
-            label = fold.add('nodeClassifier', feature)
-            label_loss = fold.add('classifyLossEstimator', label, node.label)
-            loss = fold.add('vectorAdder', left_loss, right_loss)
-            return fold.add('vectorAdder', loss, label_loss)
-        elif node.is_sym():
-            sym_gen, sym_param = fold.add('symDecoder', feature).split(2)
-            sym_param_loss = fold.add('symLossEstimator', sym_param, node.sym)
-            sym_gen_loss = decode_node_box(node.left, sym_gen)
-            label = fold.add('nodeClassifier', feature)
-            label_loss = fold.add('classifyLossEstimator', label, node.label)
-            loss = fold.add('vectorAdder', sym_gen_loss, sym_param_loss)
-            return fold.add('vectorAdder', loss, label_loss)
-
-    feature = fold.add('sampleDecoder', feature)
-    loss = decode_node_box(tree.root, feature)
-    return loss
-
+"""
 
 #########################################################################################
 ## Functions for model testing: Decode a root code into a tree structure of boxes
@@ -398,3 +377,194 @@ def decode_structure(model, root_code):
             boxes.extend(reBoxes)
 
     return boxes
+
+
+
+#################################################################################
+
+
+class GRASSEncoderDecoder(nn.Module):
+    def __init__(self, config):
+        super(GRASSEncoderDecoder, self).__init__()
+        self.box_encoder = BoxEncoder(input_size = config.obj_code_size, feature_size = config.feature_size)
+        self.adj_encoder = AdjEncoder(feature_size = config.feature_size, hidden_size = config.hidden_size)
+        self.sym_encoder = SymEncoder(feature_size = config.feature_size, symmetry_size = config.symmetry_size, hidden_size = config.hidden_size)
+        self.sample_encoder = Sampler(feature_size = config.feature_size, hidden_size = config.hidden_size)
+
+        self.box_decoder = BoxDecoder(feature_size = config.feature_size, box_size = config.box_code_size)
+        self.adj_decoder = AdjDecoder(feature_size = config.feature_size, hidden_size = config.hidden_size)
+        self.sym_decoder = SymDecoder(feature_size = config.feature_size, symmetry_size = config.symmetry_size, hidden_size = config.hidden_size)
+        self.sample_decoder = SampleDecoder(feature_size = config.feature_size, hidden_size = config.hidden_size)
+        self.node_classifier = NodeClassifier(feature_size = config.feature_size, hidden_size = config.hidden_size)
+        self.mseLoss = nn.MSELoss()
+        self.creLoss = nn.CrossEntropyLoss()
+
+    def boxEncoder(self, box):
+        return self.box_encoder(box)
+
+    def adjEncoder(self, left, right):
+        return self.adj_encoder(left, right)
+
+    def symEncoder(self, feature, sym):
+        return self.sym_encoder(feature, sym)
+
+    def sampleEncoder(self, feature):
+        return self.sample_encoder(feature)
+
+    def boxDecoder(self, feature):
+        return self.box_decoder(feature)
+
+    def adjDecoder(self, feature, feature_left, feature_right):
+        return self.adj_decoder(feature, feature_left, feature_right)
+
+    def symDecoder(self, feature):
+        return self.sym_decoder(feature)
+
+    def sampleDecoder(self, feature):
+        return self.sample_decoder(feature)
+
+    def nodeClassifier(self, feature):
+        return self.node_classifier(feature)
+
+    def boxLossEstimator(self, box_feature, gt_box_feature):
+        gt_box_feature_last6 = np.zeros(box_feature.shape)
+        for i in range(0,6):
+            for j in range(0,gt_box_feature_last6.shape[0]):
+                gt_box_feature_last6[j][i] = gt_box_feature[j][2048+i].data.cpu().numpy()
+        gt_box_feature_last6 = Variable(torch.from_numpy(gt_box_feature_last6).float().cuda(), requires_grad=False)
+        if gt_box_feature_last6[0][0].data.cpu().numpy() == 1:
+            box_feature = gt_box_feature_last6
+        return torch.cat([self.mseLoss(b, gt).mul(0.4) for b, gt in zip(box_feature, gt_box_feature_last6)], 0)
+
+    def symLossEstimator(self, sym_param, gt_sym_param):
+        return torch.cat([self.mseLoss(s, gt).mul(0.5) for s, gt in zip(sym_param, gt_sym_param)], 0)
+
+    def classifyLossEstimator(self, label_vector, gt_label_vector):
+        return torch.cat([self.creLoss(l.unsqueeze(0), gt).mul(0.2) for l, gt in zip(label_vector, gt_label_vector)], 0)
+        
+    def vectorAdder(self, v1, v2):
+        return v1.add_(v2)
+
+    def vectorMultipler(self, v):
+        return v.mul_(0.2)
+    
+    def tensor2Node(self, v):
+        return v
+
+def encode_decode_structure_fold(fold, tree):
+    def encode_node(node):
+        if node.is_leaf():
+            return fold.add('boxEncoder', node.box)
+        elif node.is_adj():
+            left = encode_node(node.left)
+            right = encode_node(node.right)
+            return fold.add('adjEncoder',left,right)
+    def sample_encoder(feature):
+        return fold.add('sampleEncoder', feature)
+
+    def decode_node_box(node, feature):
+        if node.is_leaf():
+            box = fold.add('boxDecoder', feature)
+            recon_loss = fold.add('boxLossEstimator', box, node.box)
+            label = fold.add('nodeClassifier', feature)
+            label_loss = fold.add('classifyLossEstimator', label, node.category)
+            recon_loss = fold.add('vectorMultipler', recon_loss)
+            loss = fold.add('vectorAdder', recon_loss, label_loss)
+            return loss
+        elif node.is_adj():
+            # encode
+            left_encode = encode_node(node.left)
+            right_encode = encode_node(node.right)
+            left, right = fold.add('adjDecoder', feature, left_encode, right_encode).split(2)
+            left_loss = decode_node_box(node.left, left)
+            right_loss = decode_node_box(node.right, right)
+            loss = fold.add('vectorAdder', left_loss, right_loss)
+            return loss
+    def sample_decoder(feature):
+        return fold.add('sampleDecoder', feature)
+
+    feature1 = encode_node(tree.root)
+    feature2 = sample_encoder(feature1)
+    feature3 = sample_decoder(feature2)
+    loss = decode_node_box(tree.root, feature3)
+    return loss
+
+
+def encode_decode_recon_structure_fold(fold, tree):
+    def encode_node(node):
+        if node.is_leaf():
+            return fold.add('boxEncoder', node.box)
+        elif node.is_adj():
+            left = encode_node(node.left)
+            right = encode_node(node.right)
+            return fold.add('adjEncoder',left,right)
+    def sample_encoder(feature):
+        return fold.add('sampleEncoder', feature)
+
+    def decode_node_box(node, feature):
+        if node.is_leaf():
+            box = fold.add('boxDecoder', feature)
+            recon_loss = fold.add('boxLossEstimator', box, node.box)
+            label = fold.add('nodeClassifier', feature)
+            label_loss = fold.add('classifyLossEstimator', label, node.category)
+            recon_loss = fold.add('vectorMultipler', recon_loss)
+            loss = fold.add('vectorAdder', recon_loss, label_loss)
+            return recon_loss
+        elif node.is_adj():
+            # encode
+            left_encode = encode_node(node.left)
+            right_encode = encode_node(node.right)
+            left, right = fold.add('adjDecoder', feature, left_encode, right_encode).split(2)
+            left_loss = decode_node_box(node.left, left)
+            right_loss = decode_node_box(node.right, right)
+            label = fold.add('nodeClassifier', feature)
+            loss = fold.add('vectorAdder', left_loss, right_loss)
+            return loss
+    def sample_decoder(feature):
+        return fold.add('sampleDecoder', feature)
+
+    feature1 = encode_node(tree.root)
+    feature2 = sample_encoder(feature1)
+    feature3 = sample_decoder(feature2)
+    loss = decode_node_box(tree.root, feature3)
+    return loss
+
+
+def encode_decode_label_structure_fold(fold, tree):
+    def encode_node(node):
+        if node.is_leaf():
+            return fold.add('boxEncoder', node.box)
+        elif node.is_adj():
+            left = encode_node(node.left)
+            right = encode_node(node.right)
+            return fold.add('adjEncoder',left,right)
+    def sample_encoder(feature):
+        return fold.add('sampleEncoder', feature)
+
+    def decode_node_box(node, feature):
+        if node.is_leaf():
+            box = fold.add('boxDecoder', feature)
+            recon_loss = fold.add('boxLossEstimator', box, node.box)
+            label = fold.add('nodeClassifier', feature)
+            label_loss = fold.add('classifyLossEstimator', label, node.category)
+            recon_loss = fold.add('vectorMultipler', recon_loss)
+            loss = fold.add('vectorAdder', recon_loss, label_loss)
+            return label_loss
+        elif node.is_adj():
+            # encode
+            left_encode = encode_node(node.left)
+            right_encode = encode_node(node.right)
+            left, right = fold.add('adjDecoder', feature, left_encode, right_encode).split(2)
+            left_loss = decode_node_box(node.left, left)
+            right_loss = decode_node_box(node.right, right)
+            label = fold.add('nodeClassifier', feature)
+            loss = fold.add('vectorAdder', left_loss, right_loss)
+            return loss
+    def sample_decoder(feature):
+        return fold.add('sampleDecoder', feature)
+
+    feature1 = encode_node(tree.root)
+    feature2 = sample_encoder(feature1)
+    feature3 = sample_decoder(feature2)
+    loss = decode_node_box(tree.root, feature3)
+    return loss

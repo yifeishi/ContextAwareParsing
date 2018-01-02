@@ -4,9 +4,8 @@ from scipy.io import loadmat
 from enum import Enum
 import numpy as np
 
-def FlipBoxOps(boxes,ops):
+def FlipBoxOps(boxes,ops,categories):
     # boxes
-#    boxes.reverse()
     record = -1
     for i in range(0,len(boxes)):
         if boxes[i].numpy()[0][0] != 0:
@@ -21,6 +20,7 @@ def FlipBoxOps(boxes,ops):
         if boxes[len(boxes)-1].numpy()[0][0] == 0:
             boxes.pop()
     boxes_new = boxes
+#    print('has %d boxes, '%len(boxes_new),end='')
 
     """
     # old code
@@ -59,6 +59,7 @@ def FlipBoxOps(boxes,ops):
     print(ops) 
     ops_new = ops
     """
+
     ops_new = torch.IntTensor(1,ops.size()[1])
     for i in range(0,ops.size()[1]):
         ops_new.numpy()[0][i] = -1
@@ -72,7 +73,25 @@ def FlipBoxOps(boxes,ops):
     for i in range(record,ops.size()[1]):
         ops_new.numpy()[0][i] = -1
     """
-    return (boxes_new,ops_new)
+
+    # categories
+    categoriesnumpy = categories.numpy()
+    categories = torch.from_numpy(np.fliplr(categoriesnumpy).copy())
+    record = -1
+    for i in range(0,categories.size()[1]):
+        if categories.numpy()[0][i] != -1:           
+            record = i
+            break
+    print('%d nodes'%(categories.size()[1]-record))
+
+    categories_new = torch.IntTensor(1,categories.size()[1])
+    for i in range(0,categories.size()[1]):
+        categories_new.numpy()[0][i] = -1
+    count = 0
+    for i in range(record,categories.size()[1]):
+        categories_new.numpy()[0][count] = categories.numpy()[0][i]
+        count = count + 1
+    return (boxes_new,ops_new,categories_new)
 
 class Tree(object):
     class NodeType(Enum):
@@ -81,13 +100,18 @@ class Tree(object):
         SYM = 2  # symmetry (symmetric part grouping) node
 
     class Node(object):
-        def __init__(self, box=None, left=None, right=None, node_type=None, sym=None):
+        def __init__(self, box=None, left=None, right=None, node_type=None, sym=None, index=None, category=None, feature=None):
+            
             self.box = box          # box feature vector for a leaf node
             self.sym = sym          # symmetry parameter vector for a symmetry node
             self.left = left        # left child for ADJ or SYM (a symmeter generator)
             self.right = right      # right child
             self.node_type = node_type
             self.label = torch.LongTensor([self.node_type.value])
+            self.index = index
+            if(category!=None):
+                self.category = torch.LongTensor([category])
+            self.feature = feature
 
         def is_leaf(self):
             return self.node_type == Tree.NodeType.BOX and self.box is not None
@@ -99,54 +123,79 @@ class Tree(object):
             return self.node_type == Tree.NodeType.SYM
 
 
-    def __init__(self, boxes, ops):
+    def __init__(self, boxes, ops, categories, index):
+        
         box_list = [b for b in torch.split(boxes, 1, 0)]
-        (box_list,ops) = FlipBoxOps(box_list,ops)
-        out1 = box_list[0].numpy()
-
+        (box_list,ops,categories) = FlipBoxOps(box_list,ops,categories)
+        
         queue = []
+        """
+        bug_killer = open("tree"+str(index)+".txt", "w")
+        bug_killer.write("init tree...................\n")
+        """
         for id in range(ops.size()[1]):
             if ops[0, id] == Tree.NodeType.BOX.value:
-#                print('add leaf')
                 box=box_list.pop()
-                queue.append(Tree.Node(box, node_type=Tree.NodeType.BOX))
+                # set mv feature entry to 0
+#                for i in range(0,2048):
+#                    box[0].numpy()[i] = 0
+                print('category: %s'%categories[0,id])
+                print('box: %s'%box[0].numpy()[0])
+                if box[0].numpy()[0] == 1.0 and categories[0,id] == -1:
+                    print('floor')
+                    print(categories[0,id])
+                    queue.append(Tree.Node(box, node_type=Tree.NodeType.BOX, index=id, category=99)) # for floor
+                else:
+                    print('object')
+                    print(categories[0,id])
+                    queue.append(Tree.Node(box, node_type=Tree.NodeType.BOX, index=id, category=categories[0,id])) # for object
+                """
+                bug_killer.write("%d add leaf\n" %id)
+                bug_killer.write(str(box.numpy()))
+                bug_killer.write("\n\n")
+                """
             elif ops[0, id] == Tree.NodeType.ADJ.value:
-#                print('add internal')
                 left_node = queue.pop()
                 right_node = queue.pop()
-                queue.append(Tree.Node(left=left_node, right=right_node, node_type=Tree.NodeType.ADJ))
-            elif ops[0, id] == Tree.NodeType.SYM.value:
-                node = queue.pop()
-                queue.append(Tree.Node(left=node, sym=sym_param.pop(), node_type=Tree.NodeType.SYM))
+                queue.append(Tree.Node(left=left_node, right=right_node, node_type=Tree.NodeType.ADJ, index=id))
+                """
+                bug_killer.write("%d add internal, left node is %d, right node is %d\n\n" %(id,left_node.index,right_node.index))
+                """
             else:
                 break
+        """
+        bug_killer.close()
+        """
         assert len(queue) == 1
         self.root = queue[0]
+        self.index = index
 
 
 class GRASSDataset(data.Dataset):
     def __init__(self, dir, transform=None):
         self.dir = dir
-        box_data = torch.from_numpy(loadmat(self.dir+'/box_data.mat')['boxes']).float()
-        op_data = torch.from_numpy(loadmat(self.dir+'/op_data.mat')['ops']).int()
-        sym_data = torch.from_numpy(loadmat(self.dir+'/sym_data.mat')['syms']).float()
-
-        #weight_list = torch.from_numpy(loadmat(self.dir+'/weights.mat')['weights']).float()
+        box_data = torch.from_numpy(loadmat(self.dir+'/bedroom_room_feature.mat')['boxes']).float()
+        op_data = torch.from_numpy(loadmat(self.dir+'/bedroom_room_feature.mat')['ops']).int()
+        category_data = torch.from_numpy(loadmat(self.dir+'/bedroom_room_feature.mat')['category']).int()
+        
         num_examples = op_data.size()[1]
         box_data = torch.chunk(box_data, num_examples, 1)
         op_data = torch.chunk(op_data, num_examples, 1)
-        sym_data = torch.chunk(sym_data, num_examples, 1)
-        #weight_list = torch.chunk(weight_list, num_examples, 1)
+        category_data = torch.chunk(category_data, num_examples, 1)
+        
         self.transform = transform
         self.trees = []
+        count = 0
+        trainNum = 100
         for i in range(len(op_data)) :
             boxes = torch.t(box_data[i])
             ops = torch.t(op_data[i])
-
-            tree = Tree(boxes, ops)
+            categories = torch.t(category_data[i])
+            tree = Tree(boxes, ops, categories, i)
             self.trees.append(tree)
-            print('xxxxxxxxxxxxxxxxxxxxxxx one training data')
-            break
+            count = count + 1
+ #           if count >= trainNum:
+ #               break
     def __getitem__(self, index):
         tree = self.trees[index]
         return tree
