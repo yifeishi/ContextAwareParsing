@@ -4111,6 +4111,10 @@ WriteOBBFile(char *filename, R3Scene *scene, R3SceneNode *node)
 	// Clean file
 	FILE *fpClean = fopen(filename, "w");
 	fclose(fpClean);
+
+	FILE *fpRoom = fopen(filename, "a");
+	fprintf(fpRoom, "Room %s %f %f %f %f %f %f \n", node_id, node->BBox().XMax(), node->BBox().YMax(), node->BBox().ZMax(), node->BBox().XMin(), node->BBox().YMin(), node->BBox().ZMin());
+	fclose(fpRoom);
   }
 
   // Open file
