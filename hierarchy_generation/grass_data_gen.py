@@ -10,56 +10,82 @@ import scipy.io as sio
 import numpy as np
 
 # define .mat paras
-dataNum = 1000
-maxBoxes = 100
-maxnodes = 100
-featureSize = 2054
+dataNum = 2000
+matDataNum = 1000
+maxBoxes = 50
+maxnodes = 50
+featureSize = 2060 # 2048+location+size+Xmax+Ymax+Zmax+Xmin+Ymin+Zmin
 mvFeatureSize = 2048
-boxes_all = np.zeros((featureSize,maxBoxes*dataNum))
-op_all = np.zeros((maxnodes,dataNum))
-category_all = np.zeros((maxnodes,dataNum))
-hier_name_all = ['dummy']
+train_test = 'test'
 
 # define path
 g_room_type = 'bedroom'
 g_room_file_path = '/n/fs/deepfusion/users/yifeis/sceneparsing/data/room_list/'+g_room_type+'_room.txt'
-g_out_file_path = '/n/fs/deepfusion/users/yifeis/sceneparsing/data/room_feature/'+g_room_type+'_room_feature'
+if train_test == 'train':
+    g_out_file_path = '/n/fs/deepfusion/users/yifeis/sceneparsing/data/room_feature/'+g_room_type+'_room_feature'
+elif train_test == 'test':
+    g_out_file_path = '/n/fs/deepfusion/users/yifeis/sceneparsing/data/room_feature/'+g_room_type+'_room_feature_test'
 g_suncg_house_path = '/n/fs/deepfusion/users/yifeis/sceneparsing/data/house'
 g_suncg_object_path = '/n/fs/deepfusion/users/yifeis/sceneparsing/data/object'
 g_suncg_class_map_path = '/n/fs/deepfusion/users/yifeis/sceneparsing/github/ContextAwareParsing/metadata/ModelCategoryMapping.csv'
-g_train_path = '/n/fs/deepfusion/users/yifeis/sceneparsing/data/train_test_split/SUNCG_train_sceneId_new.txt'
+if train_test == 'train':
+    g_train_path = '/n/fs/deepfusion/users/yifeis/sceneparsing/data/train_test_split/SUNCG_train_sceneId_new.txt'
+elif train_test == 'test':
+    g_train_path = '/n/fs/deepfusion/users/yifeis/sceneparsing/data/train_test_split/SUNCG_test_sceneId_new.txt'
 g_hierarchy_figure_path = '/n/fs/deepfusion/users/yifeis/sceneparsing/data/hierarchy_visualization/'+g_room_type
 if not os.path.exists(g_hierarchy_figure_path):
     os.mkdir(g_hierarchy_figure_path)
 
 def ObbFeatureTransformer(obj_obb_fea_tmp):
     obj_obb_fea = np.zeros(6)
-    obj_obb_fea[0] = (obj_obb_fea_tmp[0] + obj_obb_fea_tmp[3])*0.5
-    obj_obb_fea[1] = (obj_obb_fea_tmp[1] + obj_obb_fea_tmp[4])*0.5
-    obj_obb_fea[2] = (obj_obb_fea_tmp[2] + obj_obb_fea_tmp[5])*0.5
-    obj_obb_fea[3] = obj_obb_fea_tmp[0] - obj_obb_fea_tmp[3]
-    obj_obb_fea[4] = obj_obb_fea_tmp[1] - obj_obb_fea_tmp[4]
-    obj_obb_fea[5] = obj_obb_fea_tmp[2] - obj_obb_fea_tmp[5]
+    obj_obb_fea[0] = obj_obb_fea_tmp[0] - obj_obb_fea_tmp[3]
+    obj_obb_fea[1] = obj_obb_fea_tmp[1] - obj_obb_fea_tmp[4]
+    obj_obb_fea[2] = obj_obb_fea_tmp[2] - obj_obb_fea_tmp[5]
+    obj_obb_fea[3] = (obj_obb_fea_tmp[0] + obj_obb_fea_tmp[3])*0.5
+    obj_obb_fea[4] = (obj_obb_fea_tmp[1] + obj_obb_fea_tmp[4])*0.5
+    obj_obb_fea[5] = (obj_obb_fea_tmp[2] + obj_obb_fea_tmp[5])*0.5
     return obj_obb_fea
-
 
 def getObjFeature(index, modelid, obb_name):
     # read obb_name, find the obj_id
     obb = open(obb_name)
     obj_fea = np.ones(featureSize) # set floor feature to be all zero
+    room_cen = np.ones(3)
     count = 0
     while 1:
         line = obb.readline()
         if not line:
             break
-        L = line.split() 
-        if  L[0].split('#')[1] == index and L[1] == modelid:
+        L = line.split()
+        ##########################################
+        if L[0] == 'Room':
+            L = L[2:len(L)]
+            # read obb feature
+            room_obb_fea = list(map(float, L))
+            room_obb_fea = np.array(room_obb_fea)
+            room_obb_fea = ObbFeatureTransformer(room_obb_fea)
+            room_cen[0] = room_obb_fea[3]
+            room_cen[1] = room_obb_fea[4]
+            room_cen[2] = room_obb_fea[5]
+        ##########################################
+        elif  L[0] != 'Room' and L[0].split('#')[1] == index and L[1] == modelid:
             count = count + 1
             L = L[3:len(L)]
             # read obb feature
             obj_obb_fea = list(map(float, L))
             obj_obb_fea = np.array(obj_obb_fea)
-            obj_obb_fea = ObbFeatureTransformer(obj_obb_fea)
+            obj_obb_fea_t = ObbFeatureTransformer(obj_obb_fea)
+            ##########################################
+            obj_obb_fea[0] = obj_obb_fea[0] - room_cen[0]
+            obj_obb_fea[1] = obj_obb_fea[1] - room_cen[1]
+            obj_obb_fea[2] = obj_obb_fea[2] - room_cen[2]
+            obj_obb_fea[3] = obj_obb_fea[3] - room_cen[0]
+            obj_obb_fea[4] = obj_obb_fea[4] - room_cen[1]
+            obj_obb_fea[5] = obj_obb_fea[5] - room_cen[2]
+            obj_obb_fea_t[3] = obj_obb_fea_t[3] - room_cen[0]
+            obj_obb_fea_t[4] = obj_obb_fea_t[4] - room_cen[1]
+            obj_obb_fea_t[5] = obj_obb_fea_t[5] - room_cen[2]
+            ##########################################
             # read mv image feature
             obj_mv_fea_file_path = os.path.join(g_suncg_object_path,modelid,'rgb_img/feature_new.txt')
             obj_mv_fea_file = open(obj_mv_fea_file_path)
@@ -83,9 +109,8 @@ def getObjFeature(index, modelid, obb_name):
                     if entry_mp < obj_mv_fea_sum[i,j]:
                         entry_mp = obj_mv_fea_sum[i,j]
                 obj_mv_fea_mp[i] = entry_mp
-            obj_fea = np.concatenate((obj_mv_fea_mp,obj_obb_fea), axis=0)
+            obj_fea = np.concatenate((obj_mv_fea_mp,obj_obb_fea_t,obj_obb_fea), axis=0)
     return obj_fea
-
 
 def genGrassData(hier_name,obb_name,object_class_map,class_index_map):
     boxes = np.zeros((featureSize,maxBoxes))
@@ -199,6 +224,20 @@ while 1:
 room_file = open(g_room_file_path)
 count = 0
 while 1:
+    if count%matDataNum == 0:
+        if count != 0:
+            g_out_file_mat_path = g_out_file_path + '_' + str(count/matDataNum)
+            if not os.path.exists(g_out_file_mat_path+'.mat'):
+                hier_name_all.remove('dummy')
+                sio.savemat(g_out_file_mat_path, mdict={'boxes': boxes_all,'ops': op_all, 'hier_name':hier_name_all, 'category':category_all}, do_compression=True)
+                print('write to %s' %g_out_file_mat_path)
+        boxes_all = np.zeros((featureSize,maxBoxes*matDataNum))
+        op_all = np.zeros((maxnodes,matDataNum))
+        category_all = np.zeros((maxnodes,matDataNum))
+        count_local = 0
+        hier_name_all = ['dummy']
+        print('clean data\n')
+    
     line = room_file.readline()
     if not line:
         break
@@ -207,7 +246,8 @@ while 1:
     room_id = L[1]
     # check if it is in the training set
     if(training_set.get(house_id,0) == 1):
-        print(house_id)
+#        print(house_id)
+        xx = 1
     else:
         continue
     file_names = os.listdir(os.path.join(g_suncg_house_path,house_id))
@@ -220,17 +260,18 @@ while 1:
         content1 = hier.readlines()
         line1 = hiert.readline()
          # read the file
-        if line1.split(' ')[1] == room_id+'f' and len(content1) > 10 and len(content1) < 100: # line num of hier > 5 and < 100
+        if line1.split(' ')[1] == room_id+'f' and len(content1) > 5 and len(content1) < 50: # line num of hier (node num) > 5 and < 50
             hier_name = os.path.join(g_suncg_house_path,house_id,file_name)
             obb_name = os.path.join(g_suncg_house_path,house_id,'obb_'+room_id+'.txt')
             # get grass data for a hier (hier_name--input hier file, obb_name--input obb file, it contains the modelid & obb feature)
             (boxes,op,category) = genGrassData(hier_name,obb_name,object_class_map,class_index_map)
-            boxes_all[:,count*maxBoxes:count*maxBoxes+maxBoxes] = boxes
-            op_all[:,count] = op
-            category_all[:,count] = category
+            boxes_all[:,count_local*maxBoxes:count_local*maxBoxes+maxBoxes] = boxes
+            op_all[:,count_local] = op
+            category_all[:,count_local] = category
             hier_name_all.append(hier_name)
             count = count + 1
-            print('get %d rooms for %s' %(count,g_room_type))
+            count_local = count_local + 1
+            print('get %d rooms for %s, this is the %dth room in the %dth mat file' %(count,g_room_type,count_local,(count-1)/matDataNum+1))
             
             # copy hierarchy figure to folder
             if count > 100:
@@ -238,76 +279,8 @@ while 1:
             hier_figure_path = os.path.join(g_suncg_house_path,house_id,file_name.split('.')[0]+'.png')
             hier_figure_new_path = os.path.join(g_hierarchy_figure_path,str(count)+'_'+file_name.split('.')[0]+'.png')
             gaps_cmd = 'cp %s %s' %(hier_figure_path, hier_figure_new_path)
-            print('copy hierarchy figure')
-#            print(gaps_cmd)
-            os.system('%s' % (gaps_cmd))
+#            print('copy hierarchy figure')
+#            os.system('%s' % (gaps_cmd))
             break
     if count >= dataNum:
         break
-
-hier_name_all.remove('dummy')
-sio.savemat(g_out_file_path, mdict={'boxes': boxes_all,'ops': op_all, 'hier_name':hier_name_all, 'category':category_all}, do_compression=True)
-
-
-# old code
-"""
-count = 0
-room_file = open(g_room_file_path)
-while 1:
-    line = room_file.readline()
-    if not line:
-        break
-    L = line.split(' ')
-    house_name = L[0]
-    room_id = L[1]
-    print(house_name)
-    print(room_id)
-    room_fea = np.zeros((featureSize,maxBoxes))
-    countT = 0
-    obb_file_path = os.path.join(g_house_path,house_name,'obb_'+room_id+'.txt')
-    obb_file = open(obb_file_path)
-    while 1:
-        lineT = obb_file.readline()
-        if not lineT:
-            break
-        LT = lineT.split(' ')
-        obj_name = LT[0]
-        LT = LT[1:len(LT)-1]
-        obj_obb_fea = list(map(float, LT))
-        obj_obb_fea = np.array(obj_obb_fea)
-        obj_obb_fea = ObbFeatureTransformer(obj_obb_fea)
-        obj_mv_fea_file_path = os.path.join(g_object_path,obj_name,'rgb_img/feature.txt')
-        obj_mv_fea_file = open(obj_mv_fea_file_path)
-        obj_mv_fea_sum = np.zeros((mvFeatureSize,5))
-        obj_mv_fea_mp = np.zeros(mvFeatureSize)
-        countTT = 0
-        while 1:
-            lineTT = obj_mv_fea_file.readline()
-            if not lineTT:
-                break
-            LTT = lineTT.split('  ')
-            LTT = LTT[0:len(LTT)]
-            obj_mv_fea = list(map(float, LTT))
-            obj_mv_fea = np.array(obj_mv_fea)
-            obj_mv_fea_sum[:,countTT] = obj_mv_fea
-            countTT = countTT + 1
-        for i in range(0,mvFeatureSize):
-            entry_mp = -99999999
-            for j in range(0,5):
-                if entry_mp < obj_mv_fea_sum[i,j]:
-                    entry_mp = obj_mv_fea_sum[i,j]
-            obj_mv_fea_mp[i] = entry_mp
-        obj_fea = np.concatenate((obj_mv_fea_mp,obj_obb_fea), axis=0)
-        room_fea[:,countT] = obj_fea
-        countT = countT + 1
-#    print('box num')
-#    print(countT)
-    boxes[:,count*maxBoxes:count*maxBoxes+maxBoxes] = room_fea
-    count = count + 1
-    if dataNum == count:
-        break
-
-#np.savetxt(g_out_file_path,boxes,fmt="%.3f")  
-sio.savemat(g_out_file_path, mdict={'boxes': boxes}, do_compression=True)
-
-"""

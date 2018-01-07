@@ -30,5 +30,5 @@ for obj_dir in suncg_sub_dir:
             os.system('%s' % (pwd_cmd))
             gaps_cmd = '%s %s -categories %s -obb %s' %(scn2obb_path, file_path, g_suncg_category_path, obb_file_path)
             os.system('%s' % (gaps_cmd))
-            print('\n')      
+            print('\n')
     
