@@ -153,9 +153,9 @@ class AdjDecoder(nn.Module):
         vector_left = self.tanh(vector_left)
         vector_right = self.mlp_left_encode(right_encode_feature[:,0:1006])
         vector_right = self.tanh(vector_right)
-        left_feature = self.mlp_left(vector) + self.mlp_left(vector_left)
+        left_feature = self.mlp_left(vector) + self.mlp_left(vector_right)
         left_feature = self.tanh(left_feature)
-        right_feature = self.mlp_right(vector)  + self.mlp_right(vector_right)
+        right_feature = self.mlp_right(vector)  + self.mlp_right(vector_left)
         right_feature = self.tanh(right_feature)
         return left_feature, right_feature
 
@@ -486,11 +486,8 @@ def encode_decode_structure_fold(fold, tree):
             return loss
         elif node.is_adj():
             # encode
-#            left_encode = encode_node(node.left)
-#            right_encode = encode_node(node.right)
             left_encode = encode_node(node.left)
             right_encode = encode_node(node.right)
-
             left, right = fold.add('adjDecoder', feature, left_encode, right_encode).split(2)
             left_loss = decode_node_box(node.left, left)
             right_loss = decode_node_box(node.right, right)

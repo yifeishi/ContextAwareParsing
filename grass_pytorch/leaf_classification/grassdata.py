@@ -139,15 +139,15 @@ class Tree(object):
                 # set mv feature entry to 0
 #                for i in range(0,2048):
 #                    box[0].numpy()[i] = 0
-#                print('category: %s'%categories[0,id])
-#                print('box: %s'%box[0].numpy()[0])
+                print('category: %s'%categories[0,id])
+                print('box: %s'%box[0].numpy()[0])
                 if box[0].numpy()[0] == 1.0 and categories[0,id] == -1:
-#                    print('floor')
-#                    print(categories[0,id])
+                    print('floor')
+                    print(categories[0,id])
                     queue.append(Tree.Node(box, node_type=Tree.NodeType.BOX, index=id, category=99)) # for floor
                 else:
-#                    print('object')
-#                    print(categories[0,id])
+                    print('object')
+                    print(categories[0,id])
                     queue.append(Tree.Node(box, node_type=Tree.NodeType.BOX, index=id, category=categories[0,id])) # for object
                 """
                 bug_killer.write("%d add leaf\n" %id)
@@ -208,8 +208,7 @@ class GRASSDataset(data.Dataset):
         self.transform = transform
         self.trees = []
         count = 0
-
- #       trainNum = 100
+        trainNum = 100
         for i in range(len(op_data)) :
             boxes = torch.t(box_data[i])
             ops = torch.t(op_data[i])

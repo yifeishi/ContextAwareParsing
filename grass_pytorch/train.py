@@ -9,12 +9,11 @@ import torch.utils.data
 from torchfoldext import FoldExt
 import util
 from dynamicplot import DynamicPlot
-
 from grassdata import GRASSDataset
-#from grassmodel import GRASSEncoder
-#from grassmodel import GRASSDecoder
 from grassmodel import GRASSEncoderDecoder
 import grassmodel
+from leafclassificationmodel import LeafClassification
+import leafclassificationmodel
 
 
 config = util.get_args()
@@ -28,27 +27,27 @@ if config.cuda and torch.cuda.is_available():
 else:
     print("Not using CUDA.")
 
-#encoder = GRASSEncoder(config)
-#decoder = GRASSDecoder(config)
-encoder_decoder = GRASSEncoderDecoder(config)
-#encoder = torch.load(config.save_path+'/vae_encoder_model.pkl')
-#decoder = torch.load(config.save_path+'/vae_decoder_model.pkl')
+
+#encoder_decoder = GRASSEncoderDecoder(config)
+encoder_decoder = torch.load('./models/snapshots_2018-01-03_03-42-33/encoder_decoder_model_epoch_1300_loss_1.9827.pkl')
+leaf_classification = torch.load('./leaf_classification/models/snapshots_2018-01-05_23-32-47/encoder_decoder_model_epoch_410_loss_0.0285.pkl')
+encoder_decoder.box_encoder.encoder = leaf_classification.box_encoder.encoder
+encoder_decoder.node_classifier = leaf_classification.node_classifier
+#print(encoder_decoder)
+
 
 if config.cuda:
-#    encoder.cuda()
-#    decoder.cuda()
     encoder_decoder.cuda()
 
 print("Loading data ...... \n", end='', flush=True)
 grass_data = GRASSDataset(config.data_path)
 def my_collate(batch):
     return batch
-train_iter = torch.utils.data.DataLoader(grass_data, batch_size=config.batch_size, shuffle=False, collate_fn=my_collate)
+train_iter = torch.utils.data.DataLoader(grass_data, batch_size=config.batch_size, shuffle=True, collate_fn=my_collate)
 print("DONE")
 
 
 print("Start training ...... ")
-
 start = time.time()
 
 if config.save_snapshot:
@@ -66,8 +65,8 @@ if config.save_log:
     fd_log.write('\ncuda: {}'.format(config.cuda))
     fd_log.flush()
 
-header = '     Time    Epoch     Iteration    Progress(%)  LabelLoss  ReconLoss  TotalLoss'
-log_template = ' '.join('{:>9s},{:>5.0f}/{:<5.0f},{:>5.0f}/{:<5.0f},{:>9.1f}%,{:>11.2f},{:>10.2f},{:>10.2f}'.split(','))
+header = '     Time    Epoch     Iteration    Progress(%)       LR      LabelLoss   ReconLoss   TotalLoss'
+log_template = ' '.join('{:>9s},{:>5.0f}/{:<5.0f},{:>5.0f}/{:<5.0f},{:>9.1f}%,   {:>11.9f},{:>11.4f},{:>10.4f},{:>10.4f}'.split(','))
 print(header)
 total_iter = config.epochs * len(train_iter)
 
@@ -83,12 +82,19 @@ if not config.no_plot:
 learning_rate = config.lr
 count = 0
 for epoch in range(config.epochs):
-    if count%500== 499:
-        learning_rate = learning_rate * 0.5
-        print('learning_rate: %f'%learning_rate)
-#    encoder_opt = torch.optim.Adam(encoder.parameters(), lr=learning_rate)
-#    decoder_opt = torch.optim.Adam(decoder.parameters(), lr=learning_rate)
-    encoder_decoder_opt = torch.optim.Adam(encoder_decoder.parameters(), lr=learning_rate)
+#    encoder_decoder_opt = torch.optim.Adam(encoder_decoder.parameters(), lr=learning_rate)
+
+    encoder_decoder_opt = torch.optim.Adam([
+            {'params': encoder_decoder.adj_encoder.parameters()},
+            {'params': encoder_decoder.sym_encoder.parameters()},
+            {'params': encoder_decoder.sample_encoder.parameters()},
+            {'params': encoder_decoder.box_decoder.parameters()},
+            {'params': encoder_decoder.adj_decoder.parameters()},
+            {'params': encoder_decoder.sym_decoder.parameters()},
+            {'params': encoder_decoder.sample_decoder.parameters()},
+            {'params': encoder_decoder.box_encoder.encoder.parameters(), 'lr': learning_rate*0.01},
+            {'params': encoder_decoder.node_classifier.parameters(), 'lr': learning_rate*0.01}
+        ], lr=learning_rate)
 
     for batch_idx, batch in enumerate(train_iter):
         enc_fold = FoldExt(cuda=config.cuda)
@@ -99,19 +105,17 @@ for epoch in range(config.epochs):
             enc_dec_fold_nodes.append(grassmodel.encode_decode_structure_fold(enc_fold, example))
             enc_dec_recon_fold_nodes.append(grassmodel.encode_decode_recon_structure_fold(enc_fold, example))
             enc_dec_label_fold_nodes.append(grassmodel.encode_decode_label_structure_fold(enc_fold, example))
-        total_loss = enc_fold.apply(encoder_decoder, [enc_dec_fold_nodes, enc_dec_recon_fold_nodes, enc_dec_label_fold_nodes])
-       
+
+#        total_loss = enc_fold.apply(encoder_decoder, [enc_dec_fold_nodes, enc_dec_recon_fold_nodes, enc_dec_label_fold_nodes])
+#        sum_loss = total_loss[0].sum() / len(batch)
+#        recon_loss = total_loss[1].sum() / len(batch)
+#        label_loss = total_loss[2].sum() / len(batch)
+
+        total_loss = enc_fold.apply(encoder_decoder, [enc_dec_fold_nodes])
         sum_loss = total_loss[0].sum() / len(batch)
-        recon_loss = total_loss[1].sum() / len(batch)
-        label_loss = total_loss[2].sum() / len(batch)
-        
-        total_loss = sum_loss
-#        encoder_opt.zero_grad()
-#        decoder_opt.zero_grad()
+
         encoder_decoder_opt.zero_grad()
         sum_loss.backward()
-#        encoder_opt.step()
-#        decoder_opt.step()
         encoder_decoder_opt.step()
 
         # Report statistics
@@ -119,18 +123,20 @@ for epoch in range(config.epochs):
             print(log_template.format(strftime("%H:%M:%S",time.gmtime(time.time()-start)),
                 epoch, config.epochs, 1+batch_idx, len(train_iter),
                 100. * (1+batch_idx+len(train_iter)*epoch) / (len(train_iter)*config.epochs),
-                label_loss.data[0], recon_loss.data[0], sum_loss.data[0]))
+                learning_rate, sum_loss.data[0], sum_loss.data[0], sum_loss.data[0]))
         count=count+1
+        if count%3000==2999:
+            learning_rate = learning_rate * 0.5
+        
+    # Save snapshots of the models being trained
+    if config.validate and (epoch+1) % config.validate_every == 0 :
+        print("Test on validation set ...... ", end='', flush=True)
+        
     # Save snapshots of the models being trained
     if config.save_snapshot and (epoch+0) % config.save_snapshot_every == 0 :
         print("Saving snapshots of the models ...... ", end='', flush=True)
-        torch.save(encoder_decoder, snapshot_folder+'/encoder_decoder_model_epoch_{}_loss_{:.2f}.pkl'.format(epoch+0, sum_loss.data[0]))
+        torch.save(encoder_decoder, snapshot_folder+'/encoder_decoder_model_epoch_{}_loss_{:.4f}.pkl'.format(epoch+0, sum_loss.data[0]))
         print("DONE")
-    # Save training log
-    if config.save_log and (epoch+1) % config.save_log_every == 0 :
-        fd_log = open('training_log.log', mode='a')
-        fd_log.write('\nepoch:{} recon_loss:{:.2f} kld_loss:{:.2f} total_loss:{:.2f}'.format(epoch+1, recon_loss.data[0], kldiv_loss.data[0], total_loss.data[0]))
-        fd_log.close()
    
 # Save the final models
 print("Saving final models ...... ", end='', flush=True)

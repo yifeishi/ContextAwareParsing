@@ -4,8 +4,8 @@ from torch.autograd import Variable
 import util
 from grassdata import GRASSDataset
 from grassdata import GRASSDatasetTest
-from grassmodel import GRASSEncoderDecoder
-import grassmodel
+from leafclassificationmodel import LeafClassification
+import leafclassificationmodel
 
 
 config = util.get_args()
@@ -18,10 +18,12 @@ if config.cuda and torch.cuda.is_available():
 else:
     print("Not using CUDA.")
 
-encoder_decoder = torch.load('./models/snapshots_2018-01-03_03-42-33/encoder_decoder_model_epoch_400_loss_0.5209.pkl')
-encoder_decoder.cuda()
+leaf_classification = torch.load('./models/snapshots_2018-01-05_23-32-47/encoder_decoder_model_epoch_410_loss_0.0285.pkl')
+print(leaf_classification)
+print(leaf_classification.box_encoder.encoder)
+leaf_classification.cuda()
 
-grass_data = GRASSDataset(config.data_path)
+grass_data = GRASSDatasetTest(config.data_path)
 def my_collate(batch):
     return batch
 test_iter = torch.utils.data.DataLoader(grass_data, batch_size=1, shuffle=False, collate_fn=my_collate)
@@ -29,12 +31,15 @@ test_iter = torch.utils.data.DataLoader(grass_data, batch_size=1, shuffle=False,
 accuracy_sum = 0
 num_sum = 0
 for batch_idx, batch in enumerate(test_iter):
-    accuracy, iou, num = grassmodel.encode_decode_structure(encoder_decoder, batch[0])
+    accuracy, num = leafclassificationmodel.leaf_classification_structure(leaf_classification, batch[0])
     accuracy_sum = accuracy_sum + accuracy
     num_sum = num_sum + num
-    print('accuracy///////////')
+#    print('accuracy///////////')
     print(float(accuracy)/num)
-    print(float(accuracy_sum)/num_sum)
+#    print(float(accuracy_sum)/num_sum)
+
+print('.............')
+print(float(accuracy_sum)/num_sum)
 
 """
 for i in range(10):
