@@ -3735,21 +3735,48 @@ ReadSUNCGFile(const char *filename, R3SceneNode *parent_node)
 		R3Vector bboxMin, bboxMax;
 		std::vector<float> vecBox(6);
 		Json::Value *json_tmps, *json_tmp;
+		
 		if (GetJsonObjectMember(json_value, json_node, "bbox")) {
 			if (GetJsonObjectMember(json_items, json_value, "min")) {
 				for (Json::ArrayIndex indexT = 0; indexT < json_items->size(); indexT++) {
 					if (!GetJsonArrayEntry(json_item, json_items, indexT)) continue;
 					bboxMin[indexT] = json_item->asDouble();
 				}
+					
+//				R3Vector newBboxMin = transformation.Matrix() * bboxMin;
+//				for (int ii = 0; ii < 3; ii++)
+//					newBboxMin[ii] += transformation.Matrix()[ii][3];
 				vecBox[3] = bboxMin[0];
 				vecBox[4] = bboxMin[1];
 				vecBox[5] = bboxMin[2];
+				/*
+				printf("transformation.Matrix()...\n");
+				for (int ii = 0; ii < 4; ii++)
+				{
+					for (int jj = 0; jj < 4; jj++)
+					{
+						printf("%lf ", transformation.Matrix()[ii][jj]);
+					}
+					printf("\n");
+				}
+				for (int ii = 0; ii < 3; ii++)
+					printf("%lf ", bboxMin[ii]);
+				printf("\n");
+				for (int ii = 0; ii < 3; ii++)
+					printf("%lf ", newBboxMin[ii]);
+				printf("\n");
+				*/
+				
 			}
 			if (GetJsonObjectMember(json_items, json_value, "max")) {
 				for (Json::ArrayIndex indexT = 0; indexT < json_items->size(); indexT++) {
 					if (!GetJsonArrayEntry(json_item, json_items, indexT)) continue;
 					bboxMax[indexT] = json_item->asDouble();
 				}
+//				R3Vector newBboxMax = transformation.Matrix() * bboxMax;
+//				for (int ii = 0; ii < 3; ii++)
+//					newBboxMax[ii] += transformation.Matrix()[ii][3];
+
 				vecBox[0] = bboxMax[0];
 				vecBox[1] = bboxMax[1];
 				vecBox[2] = bboxMax[2];
@@ -4129,7 +4156,22 @@ WriteOBBFile(char *filename, R3Scene *scene, R3SceneNode *node)
 	const char *model_id = node->Info("model_id");
 	const char *node_name = node->Name();
 	const char *coarse_class = node->Info("coarse_grained_class");
-    fprintf(fp, "%s %s %s %f %f %f %f %f %f \n", node_name, model_id, coarse_class, node->BBox().XMax(), node->BBox().YMax(), node->BBox().ZMax(), node->BBox().XMin(), node->BBox().YMin(), node->BBox().ZMin());
+
+//	R3Vector bboxMax(node->BBox().XMax(), node->BBox().YMax(), node->BBox().ZMax());
+//	R3Vector newBboxMax = node->Transformation().Matrix() * bboxMax;
+//	R3Vector bboxMin(node->BBox().XMin(), node->BBox().YMin(), node->BBox().ZMin());
+//	R3Vector newBboxMin = node->Transformation().Matrix() * bboxMin;
+//	for (int ii = 0; ii < 3; ii++)
+//		newBboxMin[ii] += node->Transformation().Matrix()[ii][3];
+//	for (int ii = 0; ii < 3; ii++)
+//		newBboxMax[ii] += node->Transformation().Matrix()[ii][3];
+	fprintf(fp, "%s %s %s %f %f %f %f %f %f \n", node_name, model_id, coarse_class, node->BBox().XMax(), node->BBox().YMax(), node->BBox().ZMax(), node->BBox().XMin(), node->BBox().YMin(), node->BBox().ZMin());
+//    fprintf(fp, "%s %s %s %f %f %f %f %f %f \n", node_name, model_id, coarse_class, newBboxMax[0], newBboxMax[1], newBboxMax[2], newBboxMin[0], newBboxMin[1], newBboxMin[2]);
+//	printf("..................");
+//	printf("%f %f %f %f %f %f\n", bboxMax[0], bboxMax[1], bboxMax[2], bboxMin[0], bboxMin[1], bboxMin[2]);
+//	printf("%f %f %f %f %f %f\n", newBboxMax[0], newBboxMax[1], newBboxMax[2], newBboxMin[0], newBboxMin[1], newBboxMin[2]);
+
+//	printf("%lf %lf %lf %lf\n", node->Transformation().Matrix()[0][3], node->Transformation().Matrix()[1][3], node->Transformation().Matrix()[2][3], node->Transformation().Matrix()[3][3]);
 //    fprintf(fp, "model_id: %s \n", value_id);
 //    const char *value_class = node->Info("coarse_grained_class");
 //    fprintf(fp, "class: %s \n \n", value_class);

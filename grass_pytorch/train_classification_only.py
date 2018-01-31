@@ -29,7 +29,13 @@ else:
 
 
 #encoder_decoder = GRASSEncoderDecoder(config)
-encoder_decoder = torch.load('./models/snapshots_2018-01-12_22-52-31/encoder_decoder_model_epoch_430_loss_7.8611.pkl')
+encoder_decoder = torch.load('./models/snapshots_2018-01-03_03-42-33/encoder_decoder_model_epoch_1300_loss_1.9827.pkl')
+leaf_classification = torch.load('./leaf_classification/models/snapshots_2018-01-05_23-32-47/encoder_decoder_model_epoch_410_loss_0.0285.pkl')
+encoder_decoder.box_encoder.encoder = leaf_classification.box_encoder.encoder
+encoder_decoder.node_classifier = leaf_classification.node_classifier
+#print(encoder_decoder)
+
+
 if config.cuda:
     encoder_decoder.cuda()
 
@@ -77,6 +83,7 @@ learning_rate = config.lr
 count = 0
 for epoch in range(config.epochs):
 #    encoder_decoder_opt = torch.optim.Adam(encoder_decoder.parameters(), lr=learning_rate)
+
     encoder_decoder_opt = torch.optim.Adam([
             {'params': encoder_decoder.adj_encoder.parameters()},
             {'params': encoder_decoder.sym_encoder.parameters()},
@@ -99,16 +106,16 @@ for epoch in range(config.epochs):
             enc_dec_recon_fold_nodes.append(grassmodel.encode_decode_recon_structure_fold(enc_fold, example))
             enc_dec_label_fold_nodes.append(grassmodel.encode_decode_label_structure_fold(enc_fold, example))
 
-        total_loss = enc_fold.apply(encoder_decoder, [enc_dec_fold_nodes, enc_dec_recon_fold_nodes, enc_dec_label_fold_nodes])
-        sum_loss = total_loss[0].sum() / len(batch)
-        recon_loss = total_loss[1].sum() / len(batch)
-        label_loss = total_loss[2].sum() / len(batch)
-
-#        total_loss = enc_fold.apply(encoder_decoder, [enc_dec_fold_nodes])
+#        total_loss = enc_fold.apply(encoder_decoder, [enc_dec_fold_nodes, enc_dec_recon_fold_nodes, enc_dec_label_fold_nodes])
 #        sum_loss = total_loss[0].sum() / len(batch)
+#        recon_loss = total_loss[1].sum() / len(batch)
+#        label_loss = total_loss[2].sum() / len(batch)
+
+        total_loss = enc_fold.apply(encoder_decoder, [enc_dec_fold_nodes])
+        sum_loss = total_loss[0].sum() / len(batch)
 
         encoder_decoder_opt.zero_grad()
-        recon_loss.backward()
+        sum_loss.backward()
         encoder_decoder_opt.step()
 
         # Report statistics
@@ -116,10 +123,14 @@ for epoch in range(config.epochs):
             print(log_template.format(strftime("%H:%M:%S",time.gmtime(time.time()-start)),
                 epoch, config.epochs, 1+batch_idx, len(train_iter),
                 100. * (1+batch_idx+len(train_iter)*epoch) / (len(train_iter)*config.epochs),
-                learning_rate, label_loss.data[0], recon_loss.data[0], sum_loss.data[0]))
+                learning_rate, sum_loss.data[0], sum_loss.data[0], sum_loss.data[0]))
         count=count+1
-        if count%2000==1999:
+        if count%3000==2999:
             learning_rate = learning_rate * 0.5
+        
+    # Save snapshots of the models being trained
+    if config.validate and (epoch+1) % config.validate_every == 0 :
+        print("Test on validation set ...... ", end='', flush=True)
         
     # Save snapshots of the models being trained
     if config.save_snapshot and (epoch+0) % config.save_snapshot_every == 0 :

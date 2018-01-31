@@ -8,15 +8,17 @@ import os
 import sys
 import scipy.io as sio
 import numpy as np
+import random
 
 # define .mat paras
-dataNum = 2000
-matDataNum = 1000
+dataNum = 80000
 maxBoxes = 50
+matDataNum = 20
+samplePerturbateTimes = 50
 maxnodes = 50
 featureSize = 2060 # 2048+location+size+Xmax+Ymax+Zmax+Xmin+Ymin+Zmin
 mvFeatureSize = 2048
-train_test = 'test'
+train_test = 'train'
 
 # define path
 g_room_type = 'bedroom'
@@ -36,6 +38,7 @@ g_hierarchy_figure_path = '/n/fs/deepfusion/users/yifeis/sceneparsing/data/hiera
 if not os.path.exists(g_hierarchy_figure_path):
     os.mkdir(g_hierarchy_figure_path)
 
+# xMax,yMax,zMax,xMin,yMin,zMin to size,cen
 def ObbFeatureTransformer(obj_obb_fea_tmp):
     obj_obb_fea = np.zeros(6)
     obj_obb_fea[0] = obj_obb_fea_tmp[0] - obj_obb_fea_tmp[3]
@@ -46,10 +49,22 @@ def ObbFeatureTransformer(obj_obb_fea_tmp):
     obj_obb_fea[5] = (obj_obb_fea_tmp[2] + obj_obb_fea_tmp[5])*0.5
     return obj_obb_fea
 
+# size,cen to xMax,yMax,zMax,xMin,yMin,zMin
+def ObbFeatureTransformerReverse(obj_obb_fea_tmp):
+    obj_obb_fea = np.zeros(6)
+    obj_obb_fea[0] = obj_obb_fea_tmp[3] + obj_obb_fea_tmp[0]*0.5
+    obj_obb_fea[1] = obj_obb_fea_tmp[4] + obj_obb_fea_tmp[1]*0.5
+    obj_obb_fea[2] = obj_obb_fea_tmp[5] + obj_obb_fea_tmp[2]*0.5
+    obj_obb_fea[3] = obj_obb_fea_tmp[3] - obj_obb_fea_tmp[0]*0.5
+    obj_obb_fea[4] = obj_obb_fea_tmp[4] - obj_obb_fea_tmp[1]*0.5
+    obj_obb_fea[5] = obj_obb_fea_tmp[5] - obj_obb_fea_tmp[2]*0.5
+    return obj_obb_fea
+
 def getObjFeature(index, modelid, obb_name):
     # read obb_name, find the obj_id
     obb = open(obb_name)
     obj_fea = np.ones(featureSize) # set floor feature to be all zero
+    obj_reg = np.ones(6)
     room_cen = np.ones(3)
     count = 0
     while 1:
@@ -75,6 +90,23 @@ def getObjFeature(index, modelid, obb_name):
             obj_obb_fea = list(map(float, L))
             obj_obb_fea = np.array(obj_obb_fea)
             obj_obb_fea_t = ObbFeatureTransformer(obj_obb_fea)
+            ##########################################
+            # add random noisy to obj_obb_fea
+            perturbation = np.zeros(6)
+            for i in range(0,3):
+#                perturbation[i] = 0
+                perturbation[i] = (random.random()-0.5)*obj_obb_fea_t[i]
+            for i in range(3,6):
+#                perturbation[i] = 0
+                perturbation[i] = (random.random()-0.5)*0.1
+#            print('............mmmmmmmm')
+#            print(perturbation)
+#            print('...........')
+#            print(obj_obb_fea_t)
+            obj_obb_fea_t = obj_obb_fea_t + perturbation
+            obj_obb_fea = ObbFeatureTransformerReverse(obj_obb_fea_t)
+#            print('...........xxxxxxx')
+#            print(obj_obb_fea_t)
             ##########################################
             obj_obb_fea[0] = obj_obb_fea[0] - room_cen[0]
             obj_obb_fea[1] = obj_obb_fea[1] - room_cen[1]
@@ -110,10 +142,12 @@ def getObjFeature(index, modelid, obb_name):
                         entry_mp = obj_mv_fea_sum[i,j]
                 obj_mv_fea_mp[i] = entry_mp
             obj_fea = np.concatenate((obj_mv_fea_mp,obj_obb_fea_t,obj_obb_fea), axis=0)
-    return obj_fea
+            obj_reg = -perturbation
+    return obj_fea,obj_reg
 
 def genGrassData(hier_name,obb_name,object_class_map,class_index_map):
     boxes = np.zeros((featureSize,maxBoxes))
+    boxes_reg = np.zeros((6,maxBoxes))
     op = np.zeros(maxnodes)
     category = np.zeros(maxnodes)
     tmp = np.ones(maxnodes)
@@ -139,8 +173,9 @@ def genGrassData(hier_name,obb_name,object_class_map,class_index_map):
             op[countNode] = 0
             category[countNode] = -1
             countNode = countNode + 1
-            obj_fea = getObjFeature(L[1],L[2],obb_name)  #L1 is the local index, L2 is the model id, this is for double check
+            obj_fea,obj_reg = getObjFeature(L[1],L[2],obb_name)  #L1 is the local index, L2 is the model id, this is for double check
             boxes[:,countBox] = obj_fea
+            boxes_reg[:,countBox] = obj_reg
             countBox = countBox + 1
         elif countLine == 1:
             # first merge node
@@ -155,8 +190,9 @@ def genGrassData(hier_name,obb_name,object_class_map,class_index_map):
 #            print(class_index_map.get(object_class_map.get(L[2],-1),-1))
 #            print(object_class_map.get(L[2],-1),-1)
             countNode = countNode + 1
-            obj_fea = getObjFeature(L[1],L[2],obb_name)
+            obj_fea,obj_reg = getObjFeature(L[1],L[2],obb_name)
             boxes[:,countBox] = obj_fea
+            boxes_reg[:,countBox] = obj_reg
             countBox = countBox + 1
             """
             # jerrysyf get class by L[3], add to class_all
@@ -176,7 +212,7 @@ def genGrassData(hier_name,obb_name,object_class_map,class_index_map):
             op[countNode] = 1
             countNode = countNode + 1
         countLine = countLine + 1
-    return(boxes, op, category)
+    return(boxes, boxes_reg, op, category)
 
 
 def getSUNCGClass(g_suncg_class_map_path):
@@ -224,16 +260,17 @@ while 1:
 room_file = open(g_room_file_path)
 count = 0
 while 1:
-    if count%matDataNum == 0:
+    if count%(matDataNum*samplePerturbateTimes) == 0:
         if count != 0:
-            g_out_file_mat_path = g_out_file_path + '_' + str(count/matDataNum)
+            g_out_file_mat_path = g_out_file_path + '_' + str(count/matDataNum/samplePerturbateTimes)
             if not os.path.exists(g_out_file_mat_path+'.mat'):
                 hier_name_all.remove('dummy')
-                sio.savemat(g_out_file_mat_path, mdict={'boxes': boxes_all,'ops': op_all, 'hier_name':hier_name_all, 'category':category_all}, do_compression=True)
+                sio.savemat(g_out_file_mat_path, mdict={'boxes': boxes_all,'boxes_reg': boxes_reg_all,'ops': op_all, 'hier_name':hier_name_all, 'category':category_all}, do_compression=True)
                 print('write to %s' %g_out_file_mat_path)
-        boxes_all = np.zeros((featureSize,maxBoxes*matDataNum))
-        op_all = np.zeros((maxnodes,matDataNum))
-        category_all = np.zeros((maxnodes,matDataNum))
+        boxes_all = np.zeros((featureSize,maxBoxes*matDataNum*samplePerturbateTimes))
+        boxes_reg_all = np.zeros((6,maxBoxes*matDataNum*samplePerturbateTimes))
+        op_all = np.zeros((maxnodes,matDataNum*samplePerturbateTimes))
+        category_all = np.zeros((maxnodes,matDataNum*samplePerturbateTimes))
         count_local = 0
         hier_name_all = ['dummy']
         print('clean data\n')
@@ -264,15 +301,16 @@ while 1:
             hier_name = os.path.join(g_suncg_house_path,house_id,file_name)
             obb_name = os.path.join(g_suncg_house_path,house_id,'obb_'+room_id+'.txt')
             # get grass data for a hier (hier_name--input hier file, obb_name--input obb file, it contains the modelid & obb feature)
-            (boxes,op,category) = genGrassData(hier_name,obb_name,object_class_map,class_index_map)
-            boxes_all[:,count_local*maxBoxes:count_local*maxBoxes+maxBoxes] = boxes
-            op_all[:,count_local] = op
-            category_all[:,count_local] = category
-            hier_name_all.append(hier_name)
-            count = count + 1
-            count_local = count_local + 1
-            print('get %d rooms for %s, this is the %dth room in the %dth mat file' %(count,g_room_type,count_local,(count-1)/matDataNum+1))
-            
+            for i in range(0, samplePerturbateTimes):
+                (boxes,boxes_reg,op,category) = genGrassData(hier_name,obb_name,object_class_map,class_index_map)
+                boxes_all[:,count_local*maxBoxes:count_local*maxBoxes+maxBoxes] = boxes
+                boxes_reg_all[:,count_local*maxBoxes:count_local*maxBoxes+maxBoxes] = boxes_reg
+                op_all[:,count_local] = op
+                category_all[:,count_local] = category
+                hier_name_all.append(hier_name)
+                count = count + 1
+                count_local = count_local + 1
+                print('get %d room samples for %s, this is the %dth sample in the %dth mat file, this is the %dth sample for the room' %(count,g_room_type,count_local,(count-1)/matDataNum/samplePerturbateTimes+1,i+1))
             # copy hierarchy figure to folder
             if count > 100:
                 continue

@@ -185,6 +185,7 @@ class BoxDecoder(nn.Module):
 
     def forward(self, parent_feature):
         vector = self.mlp(parent_feature)
+        vector = self.tanh(vector)
         return vector
 
 
@@ -373,7 +374,7 @@ class GRASSEncoderDecoder(nn.Module):
         self.sym_decoder = SymDecoder(feature_size = config.feature_size, symmetry_size = config.symmetry_size, hidden_size = config.hidden_size)
         self.sample_decoder = SampleDecoder(feature_size = config.feature_size, hidden_size = config.hidden_size)
         self.node_classifier = NodeClassifier(feature_size = config.feature_size, hidden_size = config.hidden_size)
-        self.mseLoss = nn.MSELoss()
+        self.mseLoss = nn.L1Loss(size_average=True)
         self.creLoss = nn.CrossEntropyLoss()
 
     def boxEncoder(self, box):
@@ -403,15 +404,26 @@ class GRASSEncoderDecoder(nn.Module):
     def nodeClassifier(self, feature):
         return self.node_classifier(feature)
 
-    def boxLossEstimator(self, box_feature, gt_box_feature):
+    def boxLossEstimator(self, box_feature, gt_box_reg, gt_box_feature):
         gt_box_feature_last6 = np.zeros(box_feature.shape)
         for i in range(0,6):
             for j in range(0,gt_box_feature_last6.shape[0]):
                 gt_box_feature_last6[j][i] = gt_box_feature[j][2048+i].data.cpu().numpy()
         gt_box_feature_last6 = Variable(torch.from_numpy(gt_box_feature_last6).float().cuda(), requires_grad=False)
-        if gt_box_feature_last6[0][0].data.cpu().numpy() == 1:
-            box_feature = gt_box_feature_last6
-        return torch.cat([self.mseLoss(b, gt).mul(0.4) for b, gt in zip(box_feature, gt_box_feature_last6)], 0)
+        for i in range(0,gt_box_feature_last6.shape[0]):
+            if gt_box_feature_last6[i][0].data.cpu().numpy() == 1:
+                box_feature[i] = gt_box_reg[i]
+
+        
+#        print('............box')
+#        print(box_feature)
+#        print('gt_box_reg')
+#        print(gt_box_reg)
+#        print('gt_box_feature_last6')
+#        print(gt_box_feature_last6)
+        
+#        return torch.cat([self.mseLoss(b, gt).mul(0.4) for b, gt in zip(box_feature, gt_box_reg)], 0)
+        return torch.cat([self.mseLoss(b, gt) for b, gt in zip(box_feature, gt_box_reg)], 0)
 
     def boxIOUEstimator(self, box_feature, gt_box_feature):
  #       print('...............boxIOUEstimator')
@@ -459,7 +471,7 @@ class GRASSEncoderDecoder(nn.Module):
         return v1.add_(v2)
 
     def vectorMultipler(self, v):
-        return v.mul_(0.2)
+        return v.mul_(1)
     
     def tensor2Node(self, v):
         return v
@@ -478,7 +490,7 @@ def encode_decode_structure_fold(fold, tree):
     def decode_node_box(node, feature):
         if node.is_leaf():
             box = fold.add('boxDecoder', feature)
-            recon_loss = fold.add('boxLossEstimator', box, node.box)
+            recon_loss = fold.add('boxLossEstimator', box, node.reg, node.box)
             label = fold.add('nodeClassifier', feature)
             label_loss = fold.add('classifyLossEstimator', label, node.category)
             recon_loss = fold.add('vectorMultipler', recon_loss)
@@ -519,7 +531,7 @@ def encode_decode_recon_structure_fold(fold, tree):
     def decode_node_box(node, feature):
         if node.is_leaf():
             box = fold.add('boxDecoder', feature)
-            recon_loss = fold.add('boxLossEstimator', box, node.box)
+            recon_loss = fold.add('boxLossEstimator', box, node.reg, node.box)
             label = fold.add('nodeClassifier', feature)
             label_loss = fold.add('classifyLossEstimator', label, node.category)
             recon_loss = fold.add('vectorMultipler', recon_loss)
@@ -558,7 +570,7 @@ def encode_decode_label_structure_fold(fold, tree):
     def decode_node_box(node, feature):
         if node.is_leaf():
             box = fold.add('boxDecoder', feature)
-            recon_loss = fold.add('boxLossEstimator', box, node.box)
+            recon_loss = fold.add('boxLossEstimator', box, node.reg, node.box)
             label = fold.add('nodeClassifier', feature)
             label_loss = fold.add('classifyLossEstimator', label, node.category)
             recon_loss = fold.add('vectorMultipler', recon_loss)
@@ -616,6 +628,17 @@ def encode_decode_structure(model, tree):
         if node.is_leaf():
             box = model.boxDecoder(feature)
             iou = 1
+            """
+            print('..................box')
+            print(type(box.data.cpu().numpy()))
+            print(box.data.cpu().numpy())
+            print('..................reg')
+            print(type(node.reg.cpu().numpy()))
+            print(node.reg.cpu().numpy())
+            print('..................box')
+            print(type(node.box.data.cpu().numpy()[:,2048:2054]))
+            print(node.box.data.cpu().numpy()[:,2048:2054])
+            """
 #            iou = model.boxIOUEstimator(box, node.box)
 #            print('..............iou')
 #            print(iou)
@@ -628,12 +651,8 @@ def encode_decode_structure(model, tree):
                 accuracy = 1
             else:
                 accuracy = 0
-#            print('..............accuracy1')
-#            print(label.data.cpu().numpy()[0])
-#            print(node.category.numpy()[0])
-#            print(accuracy)
             num = 1
-            return (accuracy, iou, num)
+            return (accuracy, iou, num, node.box.data.cpu().numpy()[:,2048:2054], node.reg.cpu().numpy(), box.data.cpu().numpy())
         elif node.is_adj():
             # encode
             left_encode = encode_node_variable(node.left)
@@ -642,18 +661,15 @@ def encode_decode_structure(model, tree):
             left_right = model.adjDecoder(feature, left_encode, right_encode)
             left = left_right[0]
             right = left_right[1]
-            left_accuracy, left_iou, left_num = decode_node_box(node.left, left)
-            right_accuracy, right_iou, right_num = decode_node_box(node.right, right)
-#            print('..............accuracy2')
-#            print(left_accuracy)
-#            print(right_accuracy)
+            left_accuracy, left_iou, left_num, left_init_obb, left_gt_reg, left_predict_reg  = decode_node_box(node.left, left)
+            right_accuracy, right_iou, right_num, right_init_obb, right_gt_reg, right_predict_reg = decode_node_box(node.right, right)
             accuracy = left_accuracy + right_accuracy
- #           print(accuracy)
- #           print(accuracy)
- #           left_iou.add_(right_iou)
             left_iou= left_iou + right_iou
             num = left_num + right_num
-            return (accuracy, left_iou, num)
+            init_obb = np.vstack((left_init_obb,right_init_obb))
+            gt_reg = np.vstack((left_gt_reg,right_gt_reg))
+            predict_reg = np.vstack((left_predict_reg,right_predict_reg))
+            return (accuracy, left_iou, num, init_obb, gt_reg, predict_reg)
     def sample_decoder(feature):
         output = model.sampleDecoder(feature)
         return output
@@ -661,6 +677,6 @@ def encode_decode_structure(model, tree):
     feature1 = encode_node(tree.root)
     feature2 = sample_encoder(feature1)
     feature3 = sample_decoder(feature2)
-    accuracy, iou, num = decode_node_box(tree.root, feature3)
-    return accuracy, iou, num
+    accuracy, iou, num, init_obb, gt_reg, predict_reg = decode_node_box(tree.root, feature3)
+    return accuracy, iou, num, init_obb, gt_reg, predict_reg
     
