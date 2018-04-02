@@ -181,7 +181,7 @@ class GRASSDataset(data.Dataset):
     def __init__(self, dir, transform=None):
         self.dir = dir
 
-        for i in range(1, 80):
+        for i in range(1, 40):
             mat_data = loadmat(self.dir+'/bedroom_room_feature_'+str(i)+'.mat')
             if i == 1:
                 box_data = mat_data['boxes']
@@ -244,9 +244,9 @@ class GRASSDatasetTest(data.Dataset):
     def __init__(self, dir, transform=None):
         self.dir = dir
     
-        for i in range(1, 2):
+        for i in range(40, 41):
             mat_data = loadmat(self.dir+'/bedroom_room_feature_'+str(i)+'.mat')
-            if i == 1:
+            if i == 40:
                 box_data = mat_data['boxes']
                 box_reg_data = mat_data['boxes_reg']
                 op_data = mat_data['ops']

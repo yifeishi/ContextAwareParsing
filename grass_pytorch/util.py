@@ -30,7 +30,7 @@ def get_args():
 
     parser.add_argument('--no_cuda', action='store_true', default=False)
     parser.add_argument('--gpu', type=int, default=0)
-    parser.add_argument('--data_path', type=str, default='/data/05/deepfusion/users/yifeis/sceneparsing/data/room_feature')
+    parser.add_argument('--data_path', type=str, default='/data/03/yifeis/users/yifeis/sceneparsing/data/room_feature')
     parser.add_argument('--save_path', type=str, default='models')
     parser.add_argument('--resume_snapshot', type=str, default='')
     args = parser.parse_args()

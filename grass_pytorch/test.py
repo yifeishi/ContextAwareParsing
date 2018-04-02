@@ -46,7 +46,7 @@ if config.cuda and torch.cuda.is_available():
 else:
     print("Not using CUDA.")
 
-encoder_decoder = torch.load('./models/encoder_decoder_box_reg_10room_1000sample_model.pkl')
+encoder_decoder = torch.load('./models/snapshots_2018-02-04_04-19-42/encoder_decoder_model_epoch_10_loss_0.2326.pkl')
 encoder_decoder.cuda()
 
 grass_data = GRASSDatasetTest(config.data_path)
@@ -57,12 +57,13 @@ test_iter = torch.utils.data.DataLoader(grass_data, batch_size=1, shuffle=False,
 accuracy_sum = 0
 num_sum = 0
 for batch_idx, batch in enumerate(test_iter):
+    print('batch_idx: %d'%batch_idx)
     accuracy, iou, num, init_obb, gt_reg, predict_reg = grassmodel.encode_decode_structure(encoder_decoder, batch[0])
     accuracy_sum = accuracy_sum + accuracy
     num_sum = num_sum + num
-#    print('accuracy///////////')
-#    print(float(accuracy)/num)
-#    print(float(accuracy_sum)/num_sum)
+    print('accuracy///////////')
+    print(float(accuracy)/num)
+    print(float(accuracy_sum)/num_sum)
 #    print('box///////////')
 #    print(init_obb)
 #    print(gt_reg)
@@ -82,22 +83,22 @@ for batch_idx, batch in enumerate(test_iter):
         obj_obb_fea_tmp_init = init_obb[i,:]
         obj_obb_fea_tmp_gt = init_obb[i,:] + gt_reg[i,:]
         obj_obb_fea_tmp_predict = init_obb[i,:] + predict_reg[i,:]
+        
+        obj_obb_fea_tmp_init[3:6] = obj_obb_fea_tmp_gt[3:6]
+        obj_obb_fea_tmp_predict[3:6] = obj_obb_fea_tmp_gt[3:6]
+
+ #       obj_obb_fea_tmp_init[0:3] = obj_obb_fea_tmp_gt[0:3]
+ #       obj_obb_fea_tmp_predict[0:3] = obj_obb_fea_tmp_gt[0:3]
+
+
         obj_obb_fea_init = ObbFeatureTransformerReverse(obj_obb_fea_tmp_init)
         obj_obb_fea_gt = ObbFeatureTransformerReverse(obj_obb_fea_tmp_gt)
         obj_obb_fea_predict = ObbFeatureTransformerReverse(obj_obb_fea_tmp_predict)
 
-#        print('box///////////')
-#        print(obj_obb_fea_tmp_init)
-#        print(obj_obb_fea_tmp_gt)
-#        print(obj_obb_fea_tmp_predict)
-#        print(obj_obb_fea_init)
-#        print(obj_obb_fea_gt)
-#        print(obj_obb_fea_predict)
-#        print(obj_obb_fea_predict)
-#        print('%f, %f, %f, %f '%(obj_obb_fea_gt[0],obj_obb_fea_gt[1],obj_obb_fea_tmp_gt[0],obj_obb_fea_tmp_gt[1]))
         ax1.add_patch(patches.Rectangle((obj_obb_fea_init[3], obj_obb_fea_init[5]),obj_obb_fea_tmp_init[0],obj_obb_fea_tmp_init[2],linewidth=1, edgecolor='r', facecolor='none'))
         ax1.add_patch(patches.Rectangle((obj_obb_fea_gt[3], obj_obb_fea_gt[5]),obj_obb_fea_tmp_gt[0],obj_obb_fea_tmp_gt[2],linewidth=1, edgecolor='b', facecolor='none'))
         ax1.add_patch(patches.Rectangle((obj_obb_fea_predict[3], obj_obb_fea_predict[5]),obj_obb_fea_tmp_predict[0],obj_obb_fea_tmp_predict[2],linewidth=1, edgecolor='g', facecolor='none'))
+        
         if xMin>obj_obb_fea_gt[3]:
             xMin=obj_obb_fea_gt[3]
         if yMin>obj_obb_fea_gt[5]:
@@ -113,4 +114,4 @@ for batch_idx, batch in enumerate(test_iter):
     yMax=yMax+1
     plt.xlim(xMin,xMax)
     plt.ylim(yMin,yMax)
-    fig1.savefig('./plot/rect'+str(batch_idx)+'.png', dpi=90, bbox_inches='tight')
+    #fig1.savefig('./plot/rect'+str(batch_idx)+'.png', dpi=90, bbox_inches='tight')

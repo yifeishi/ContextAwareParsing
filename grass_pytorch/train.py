@@ -29,7 +29,7 @@ else:
 
 
 #encoder_decoder = GRASSEncoderDecoder(config)
-encoder_decoder = torch.load('./models/snapshots_2018-01-12_22-52-31/encoder_decoder_model_epoch_430_loss_7.8611.pkl')
+encoder_decoder = torch.load('./models/snapshots_2018-02-03_21-22-32/encoder_decoder_model_epoch_40_loss_0.1960.pkl')
 if config.cuda:
     encoder_decoder.cuda()
 
@@ -108,7 +108,7 @@ for epoch in range(config.epochs):
 #        sum_loss = total_loss[0].sum() / len(batch)
 
         encoder_decoder_opt.zero_grad()
-        recon_loss.backward()
+        sum_loss.backward()
         encoder_decoder_opt.step()
 
         # Report statistics

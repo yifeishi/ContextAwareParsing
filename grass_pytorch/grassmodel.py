@@ -414,16 +414,15 @@ class GRASSEncoderDecoder(nn.Module):
             if gt_box_feature_last6[i][0].data.cpu().numpy() == 1:
                 box_feature[i] = gt_box_reg[i]
 
-        
 #        print('............box')
-#        print(box_feature)
+ #       print(box_feature)
 #        print('gt_box_reg')
 #        print(gt_box_reg)
 #        print('gt_box_feature_last6')
 #        print(gt_box_feature_last6)
         
 #        return torch.cat([self.mseLoss(b, gt).mul(0.4) for b, gt in zip(box_feature, gt_box_reg)], 0)
-        return torch.cat([self.mseLoss(b, gt) for b, gt in zip(box_feature, gt_box_reg)], 0)
+        return torch.cat([self.mseLoss(b, gt) for b, gt in zip(box_feature[:,0:3], gt_box_reg[:,0:3])], 0)
 
     def boxIOUEstimator(self, box_feature, gt_box_feature):
  #       print('...............boxIOUEstimator')
@@ -491,9 +490,10 @@ def encode_decode_structure_fold(fold, tree):
         if node.is_leaf():
             box = fold.add('boxDecoder', feature)
             recon_loss = fold.add('boxLossEstimator', box, node.reg, node.box)
+            recon_loss = fold.add('vectorMultipler', recon_loss)
             label = fold.add('nodeClassifier', feature)
             label_loss = fold.add('classifyLossEstimator', label, node.category)
-            recon_loss = fold.add('vectorMultipler', recon_loss)
+            
             loss = fold.add('vectorAdder', recon_loss, label_loss)
             return loss
         elif node.is_adj():

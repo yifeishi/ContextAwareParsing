@@ -12,11 +12,11 @@ import random
 
 # define .mat paras
 dataNum = 80000
+matDataNum = 50
+samplePerturbateTimes = 20
 maxBoxes = 50
-matDataNum = 20
-samplePerturbateTimes = 50
 maxnodes = 50
-featureSize = 2060 # 2048+location+size+Xmax+Ymax+Zmax+Xmin+Ymin+Zmin
+featureSize = 2060 # 2048+size+location+Xmax+Ymax+Zmax+Xmin+Ymin+Zmin
 mvFeatureSize = 2048
 train_test = 'train'
 
@@ -94,10 +94,8 @@ def getObjFeature(index, modelid, obb_name):
             # add random noisy to obj_obb_fea
             perturbation = np.zeros(6)
             for i in range(0,3):
-#                perturbation[i] = 0
                 perturbation[i] = (random.random()-0.5)*obj_obb_fea_t[i]
             for i in range(3,6):
-#                perturbation[i] = 0
                 perturbation[i] = (random.random()-0.5)*0.1
 #            print('............mmmmmmmm')
 #            print(perturbation)
